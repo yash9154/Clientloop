@@ -1,19 +1,22 @@
-import { Router } from 'express';
-import { getClients, getClient, createClient, updateClient, deleteClient } from '../controllers/clientController.js';
+import express from 'express';
+import {
+    getClients,
+    getClient,
+    createClient,
+    updateClient,
+    deleteClient
+} from '../controllers/clientController.js';
 import { protect, requireAgency } from '../middleware/auth.js';
 
-const router = Router();
+const router = express.Router();
 
-// All routes require authentication + agency role
+// All client routes require agency login
 router.use(protect, requireAgency);
 
-router.route('/')
-    .get(getClients)
-    .post(createClient);
-
-router.route('/:id')
-    .get(getClient)
-    .put(updateClient)
-    .delete(deleteClient);
+router.get('/', getClients);
+router.post('/', createClient);
+router.get('/:id', getClient);
+router.put('/:id', updateClient);
+router.delete('/:id', deleteClient);
 
 export default router;

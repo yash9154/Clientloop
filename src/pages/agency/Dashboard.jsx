@@ -1,29 +1,24 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-    Users,
-    FolderOpen,
-    Clock,
-    CheckCircle2,
-    ArrowRight,
-    FileText,
-    MessageSquare,
-    AlertCircle
+    Users, UserCheck, Clock, TrendingUp,
+    ArrowRight, Plus, Calendar, AlertCircle
 } from 'lucide-react';
 
-function StatCard({ icon: Icon, label, value, color = 'primary', trend }) {
+function StatCard({ icon: Icon, label, value, color = 'primary' }) {
     const colors = {
         primary: { bg: 'var(--color-primary-100)', text: 'var(--color-primary-600)' },
         success: { bg: 'var(--color-success-100)', text: 'var(--color-success-600)' },
         warning: { bg: 'var(--color-warning-100)', text: 'var(--color-warning-600)' },
-        info: { bg: 'var(--color-info-100)', text: 'var(--color-info-600)' }
+        info:    { bg: 'var(--color-info-100)',    text: 'var(--color-info-600)'    },
     };
-
+    const c = colors[color];
     return (
         <div className="stat-card animate-fade-in-up">
-            <div className="stat-icon" style={{ background: colors[color].bg, color: colors[color].text }}>
-                <Icon size={24} />
+            <div className="stat-icon" style={{ background: c.bg, color: c.text }}>
+                <Icon size={22} />
             </div>
             <div className="stat-content">
                 <div className="stat-label">{label}</div>
@@ -33,178 +28,77 @@ function StatCard({ icon: Icon, label, value, color = 'primary', trend }) {
     );
 }
 
-function RecentActivity({ updates, projects, clients }) {
-    const getProject = (projectId) => projects.find(p => p.id === projectId);
-    const getClient = (clientId) => clients.find(c => c.id === clientId);
+function RecentClients({ clients }) {
+    const getInitials = (name) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const gradients = [
+        'linear-gradient(135deg,#6366f1,#8b5cf6)',
+        'linear-gradient(135deg,#10b981,#059669)',
+        'linear-gradient(135deg,#f59e0b,#d97706)',
+        'linear-gradient(135deg,#3b82f6,#2563eb)',
+        'linear-gradient(135deg,#ec4899,#db2777)',
+    ];
+    const getGradient = (name) => gradients[name.charCodeAt(0) % gradients.length];
 
-    const formatTime = (dateString) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const days = Math.floor(hours / 24);
-
-        if (hours < 1) return 'Just now';
-        if (hours < 24) return `${hours}h ago`;
-        if (days === 1) return 'Yesterday';
-        return `${days} days ago`;
-    };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'approved':
-                return <CheckCircle2 size={16} style={{ color: 'var(--color-success-500)' }} />;
-            case 'changes-requested':
-                return <AlertCircle size={16} style={{ color: 'var(--color-error-500)' }} />;
-            default:
-                return <Clock size={16} style={{ color: 'var(--color-warning-500)' }} />;
-        }
+    const statusColors = {
+        active:   { bg: 'var(--color-success-100)', text: 'var(--color-success-700)' },
+        inactive: { bg: 'var(--color-gray-100)',     text: 'var(--color-gray-600)'    },
+        lead:     { bg: 'var(--color-info-100)',     text: 'var(--color-info-600)'    },
     };
 
     return (
-        <div className="card" style={{ animation: 'fadeInUp 0.4s ease 0.1s backwards' }}>
+        <div className="card animate-fade-in-up">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
-                    Recent Updates
+                    Recent Clients
                 </h3>
-                <Link to="/projects" className="btn btn-ghost btn-sm">
+                <Link to="/clients" className="btn btn-ghost btn-sm">
                     View all <ArrowRight size={14} />
                 </Link>
             </div>
             <div className="card-body" style={{ padding: 0 }}>
-                {updates.slice(0, 5).map((update, index) => {
-                    const project = getProject(update.projectId);
-                    const client = project ? getClient(project.clientId) : null;
-
-                    return (
-                        <Link
-                            key={update.id}
-                            to={`/projects/${update.projectId}`}
-                            className="transition-colors"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 'var(--space-4)',
-                                padding: 'var(--space-4) var(--space-6)',
-                                borderBottom: index < 4 ? '1px solid var(--border-light)' : 'none'
-                            }}
-                        >
-                            <div style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: 'var(--radius-full)',
-                                background: 'var(--color-primary-100)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'var(--color-primary-600)',
-                                flexShrink: 0
-                            }}>
-                                <FileText size={18} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{
-                                    fontWeight: 'var(--font-weight-medium)',
-                                    marginBottom: 'var(--space-1)',
-                                    color: 'var(--text-primary)'
-                                }}>
-                                    {update.title}
-                                </div>
-                                <div style={{
-                                    fontSize: 'var(--font-size-sm)',
-                                    color: 'var(--text-tertiary)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-2)'
-                                }}>
-                                    <span>{project?.name}</span>
-                                    <span>•</span>
-                                    <span>{client?.name}</span>
-                                </div>
-                            </div>
-                            <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'flex-end',
-                                gap: 'var(--space-2)'
-                            }}>
-                                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                                    {formatTime(update.createdAt)}
-                                </span>
-                                {update.approvalStatus && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-                                        {getStatusIcon(update.approvalStatus)}
-                                    </div>
-                                )}
-                            </div>
+                {clients.length === 0 ? (
+                    <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        <Users size={36} style={{ margin: '0 auto var(--space-3)', opacity: 0.4 }} />
+                        <p style={{ marginBottom: 'var(--space-4)' }}>No clients yet</p>
+                        <Link to="/clients" className="btn btn-primary btn-sm">
+                            <Plus size={14} /> Add First Client
                         </Link>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function PendingApprovals({ updates, projects, clients }) {
-    const pendingUpdates = updates.filter(u => u.approvalStatus === 'pending');
-    const getProject = (projectId) => projects.find(p => p.id === projectId);
-    const getClient = (clientId) => clients.find(c => c.id === clientId);
-
-    return (
-        <div className="card" style={{ animation: 'fadeInUp 0.4s ease 0.2s backwards' }}>
-            <div className="card-header">
-                <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
-                    Pending Approvals
-                </h3>
-            </div>
-            <div className="card-body" style={{ padding: 0 }}>
-                {pendingUpdates.length === 0 ? (
-                    <div style={{
-                        padding: 'var(--space-8)',
-                        textAlign: 'center',
-                        color: 'var(--text-tertiary)'
-                    }}>
-                        <CheckCircle2 size={40} style={{ margin: '0 auto var(--space-3)', opacity: 0.5 }} />
-                        <p>No pending approvals</p>
                     </div>
                 ) : (
-                    pendingUpdates.slice(0, 4).map((update, index) => {
-                        const project = getProject(update.projectId);
-                        const client = project ? getClient(project.clientId) : null;
-
+                    clients.slice(0, 5).map((client, i) => {
+                        const sc = statusColors[client.status] || statusColors.active;
                         return (
                             <Link
-                                key={update.id}
-                                to={`/projects/${update.projectId}`}
+                                key={client._id}
+                                to={`/clients/${client._id}`}
                                 style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
+                                    display: 'flex', alignItems: 'center',
                                     gap: 'var(--space-3)',
-                                    padding: 'var(--space-4) var(--space-6)',
-                                    borderBottom: index < pendingUpdates.length - 1 ? '1px solid var(--border-light)' : 'none'
+                                    padding: 'var(--space-4) var(--space-5)',
+                                    borderBottom: i < clients.slice(0,5).length - 1 ? '1px solid var(--border-light)' : 'none',
+                                    transition: 'background var(--transition-fast)'
                                 }}
-                                className="transition-colors"
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             >
-                                <div className="avatar avatar-sm avatar-gradient">
-                                    {client?.name?.charAt(0) || '?'}
+                                <div className="avatar avatar-md" style={{ background: getGradient(client.name), color: 'white', flexShrink: 0 }}>
+                                    {getInitials(client.name)}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{
-                                        fontWeight: 'var(--font-weight-medium)',
-                                        fontSize: 'var(--font-size-sm)',
-                                        color: 'var(--text-primary)',
-                                        marginBottom: '2px'
-                                    }}>
-                                        {update.title}
+                                    <div style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                                        {client.name}
                                     </div>
-                                    <div style={{
-                                        fontSize: 'var(--font-size-xs)',
-                                        color: 'var(--text-tertiary)'
-                                    }}>
-                                        {client?.name}
+                                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
+                                        {client.email}
                                     </div>
                                 </div>
-                                <span className="badge badge-pending">Pending</span>
+                                <span style={{
+                                    fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-medium)',
+                                    padding: '2px 10px', borderRadius: 'var(--radius-full)',
+                                    background: sc.bg, color: sc.text, textTransform: 'capitalize'
+                                }}>
+                                    {client.status}
+                                </span>
                             </Link>
                         );
                     })
@@ -214,26 +108,100 @@ function PendingApprovals({ updates, projects, clients }) {
     );
 }
 
+function FollowUpReminders({ clients }) {
+    const now = new Date();
+    const due = clients
+        .filter(c => c.followUpDate && new Date(c.followUpDate) <= now)
+        .sort((a, b) => new Date(a.followUpDate) - new Date(b.followUpDate));
+
+    const upcoming = clients
+        .filter(c => c.followUpDate && new Date(c.followUpDate) > now)
+        .sort((a, b) => new Date(a.followUpDate) - new Date(b.followUpDate))
+        .slice(0, 3);
+
+    const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    return (
+        <div className="card animate-fade-in-up">
+            <div className="card-header">
+                <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
+                    Follow-ups
+                </h3>
+            </div>
+            <div className="card-body" style={{ padding: 0 }}>
+                {due.length === 0 && upcoming.length === 0 ? (
+                    <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        <Calendar size={36} style={{ margin: '0 auto var(--space-3)', opacity: 0.4 }} />
+                        <p>No follow-ups scheduled</p>
+                    </div>
+                ) : (
+                    <>
+                        {due.map((client, i) => (
+                            <Link
+                                key={client._id}
+                                to={`/clients/${client._id}`}
+                                style={{
+                                    display: 'flex', alignItems: 'center',
+                                    gap: 'var(--space-3)',
+                                    padding: 'var(--space-3) var(--space-5)',
+                                    borderBottom: '1px solid var(--border-light)',
+                                    background: 'var(--color-error-50)'
+                                }}
+                            >
+                                <AlertCircle size={16} style={{ color: 'var(--color-error-500)', flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                                        {client.name}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-600)' }}>
+                                        Overdue · {formatDate(client.followUpDate)}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                        {upcoming.map((client, i) => (
+                            <Link
+                                key={client._id}
+                                to={`/clients/${client._id}`}
+                                style={{
+                                    display: 'flex', alignItems: 'center',
+                                    gap: 'var(--space-3)',
+                                    padding: 'var(--space-3) var(--space-5)',
+                                    borderBottom: i < upcoming.length - 1 ? '1px solid var(--border-light)' : 'none'
+                                }}
+                            >
+                                <Calendar size={16} style={{ color: 'var(--color-primary-500)', flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                                        {client.name}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
+                                        Due {formatDate(client.followUpDate)}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function QuickActions() {
     return (
-        <div className="card" style={{ animation: 'fadeInUp 0.4s ease 0.3s backwards' }}>
+        <div className="card animate-fade-in-up">
             <div className="card-header">
                 <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
                     Quick Actions
                 </h3>
             </div>
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <Link to="/clients" className="btn btn-primary" style={{ justifyContent: 'flex-start' }}>
+                    <Plus size={18} /> Add New Client
+                </Link>
                 <Link to="/clients" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }}>
-                    <Users size={18} />
-                    Add New Client
-                </Link>
-                <Link to="/projects" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }}>
-                    <FolderOpen size={18} />
-                    Create Project
-                </Link>
-                <Link to="/projects" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }}>
-                    <MessageSquare size={18} />
-                    Post Update
+                    <Users size={18} /> View All Clients
                 </Link>
             </div>
         </div>
@@ -242,51 +210,32 @@ function QuickActions() {
 
 export default function Dashboard() {
     const { user } = useAuth();
-    const { clients, projects, updates, getStats } = useData();
+    const { clients, getStats } = useData();
     const stats = getStats();
 
     return (
         <div>
             <div className="page-header">
-                <h1 className="page-title">Welcome back, {user?.name?.split(' ')[0]}! 👋</h1>
-                <p className="page-subtitle">Here's what's happening with your projects today.</p>
+                <h1 className="page-title">
+                    Welcome back, {user?.name?.split(' ')[0]}! 👋
+                </h1>
+                <p className="page-subtitle">Here's an overview of your clients.</p>
             </div>
 
-            {/* Stats Grid */}
+            {/* Stats */}
             <div className="grid grid-cols-4 md:grid-cols-2 gap-4" style={{ marginBottom: 'var(--space-8)' }}>
-                <StatCard
-                    icon={Users}
-                    label="Total Clients"
-                    value={stats.totalClients}
-                    color="primary"
-                />
-                <StatCard
-                    icon={FolderOpen}
-                    label="Active Projects"
-                    value={stats.totalProjects}
-                    color="info"
-                />
-                <StatCard
-                    icon={Clock}
-                    label="Pending Approvals"
-                    value={stats.pendingApprovals}
-                    color="warning"
-                />
-                <StatCard
-                    icon={CheckCircle2}
-                    label="Completed"
-                    value={stats.completedProjects}
-                    color="success"
-                />
+                <StatCard icon={Users}     label="Total Clients"    value={stats.totalClients}    color="primary" />
+                <StatCard icon={UserCheck} label="Active Clients"   value={stats.activeClients}   color="success" />
+                <StatCard icon={TrendingUp} label="Leads"           value={stats.leadClients}     color="info"    />
+                <StatCard icon={Clock}     label="Follow-ups Due"   value={stats.pendingFollowUps} color="warning" />
             </div>
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-3 lg:grid-cols-1 gap-6">
-                <div style={{ gridColumn: 'span 2' }} className="lg:grid-cols-1">
-                    <RecentActivity updates={updates} projects={projects} clients={clients} />
-                </div>
+            {/* Content Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 'var(--space-6)' }}
+                className="lg:flex lg:flex-col">
+                <RecentClients clients={clients} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                    <PendingApprovals updates={updates} projects={projects} clients={clients} />
+                    <FollowUpReminders clients={clients} />
                     <QuickActions />
                 </div>
             </div>

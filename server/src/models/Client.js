@@ -35,15 +35,22 @@ const clientSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['active', 'inactive'],
+        enum: ['active', 'inactive', 'lead'],
         default: 'active'
     },
+    // Follow-up date set by agency
+    followUpDate: {
+        type: Date,
+        default: null
+    },
+    // The agency user who owns this client
     agencyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
         index: true
     },
+    // The auto-created User account for client portal login
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -53,7 +60,7 @@ const clientSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Compound index for unique client email per agency
+// One email per agency (same client email can exist under different agencies)
 clientSchema.index({ email: 1, agencyId: 1 }, { unique: true });
 
 const Client = mongoose.model('Client', clientSchema);

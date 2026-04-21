@@ -18,13 +18,14 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         minlength: 6,
-        select: false // Don't include password in queries by default
+        select: false
     },
     role: {
         type: String,
         enum: ['agency', 'client'],
         default: 'agency'
     },
+    // Only used for client accounts — links to their Client record
     clientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Client',
@@ -35,43 +36,7 @@ const userSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
-    plan: {
-        type: String,
-        enum: ['free', 'starter', 'agency'],
-        default: 'free'
-    },
     avatar: {
-        type: String,
-        default: null
-    },
-    googleId: {
-        type: String,
-        default: null
-    },
-    subscription: {
-        plan: { type: String, default: 'free' },
-        status: { type: String, default: 'active' },
-        clientLimit: { type: Number, default: 1 },
-        projectLimit: { type: Number, default: 3 },
-        storageLimit: { type: Number, default: 50 * 1024 * 1024 }, // 50MB
-        stripeCustomerId: { type: String, default: null },
-        stripeSubscriptionId: { type: String, default: null }
-    },
-    // Password reset token fields
-    passwordResetToken: {
-        type: String,
-        default: null
-    },
-    passwordResetExpires: {
-        type: Date,
-        default: null
-    },
-    // Email verification
-    isEmailVerified: {
-        type: Boolean,
-        default: false
-    },
-    emailVerificationToken: {
         type: String,
         default: null
     }
@@ -86,7 +51,7 @@ userSchema.pre('save', async function (next) {
     next();
 });
 
-// Compare password method
+// Compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
@@ -98,35 +63,8 @@ userSchema.methods.toJSON = function () {
     return obj;
 };
 
-// Generate password reset token
-userSchema.methods.generatePasswordResetToken = function () {
-    import('crypto').then(({ randomBytes }) => {
-        const resetToken = randomBytes(32).toString('hex');
-        this.passwordResetToken = resetToken;
-        this.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // expires in 1 hour
-    });
-};
-
-// Verify password reset token
-userSchema.methods.verifyPasswordResetToken = function (token) {
-    return (
-        this.passwordResetToken === token &&
-        this.passwordResetExpires > new Date()
-    );
-};
-
-// Clear password reset token
-userSchema.methods.clearPasswordResetToken = function () {
-    this.passwordResetToken = null;
-    this.passwordResetExpires = null;
-};
-
-// Add indexes for frequently queried fields
-userSchema.index({ email: 1 }); // Email lookups
-userSchema.index({ googleId: 1 }); // Google OAuth lookups
-userSchema.index({ role: 1 }); // Filter by role
-userSchema.index({ createdAt: -1 }); // Sort by creation date
-userSchema.index({ passwordResetToken: 1 }); // Fast token lookups
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
 
 const User = mongoose.model('User', userSchema);
 export default User;

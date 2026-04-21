@@ -1,15 +1,26 @@
-import { Router } from 'express';
-import { getUpdates, getUpdatesByProject, createUpdate, approveUpdate, requestChanges } from '../controllers/updateController.js';
-import { protect } from '../middleware/auth.js';
+import express from 'express';
+import {
+    getUpdatesByClient,
+    getMyUpdates,
+    createUpdate,
+    editUpdate,
+    deleteUpdate,
+    approveUpdate,
+    requestChanges
+} from '../controllers/updateController.js';
+import { protect, requireAgency, requireClient } from '../middleware/auth.js';
 
-const router = Router();
+const router = express.Router();
 
-router.use(protect);
+// Agency routes
+router.get('/client/:clientId', protect, requireAgency, getUpdatesByClient);
+router.post('/', protect, requireAgency, createUpdate);
+router.put('/:id', protect, requireAgency, editUpdate);
+router.delete('/:id', protect, requireAgency, deleteUpdate);
 
-router.get('/', getUpdates);
-router.get('/project/:projectId', getUpdatesByProject);
-router.post('/', createUpdate);
-router.post('/:id/approve', approveUpdate);
-router.post('/:id/request-changes', requestChanges);
+// Client routes
+router.get('/my-updates', protect, requireClient, getMyUpdates);
+router.put('/:id/approve', protect, requireClient, approveUpdate);
+router.put('/:id/request-changes', protect, requireClient, requestChanges);
 
 export default router;

@@ -1,45 +1,25 @@
 import Client from '../models/Client.js';
 import User from '../models/User.js';
-import Project from '../models/Project.js';
 import Update from '../models/Update.js';
-import Comment from '../models/Comment.js';
-import { generateSecurePassword, validatePasswordStrength } from '../utils/passwordValidator.js';
-import { sendEmail, emailTemplates } from '../utils/emailService.js';
+import Note from '../models/Note.js';
 
 /**
- * @desc    Get all clients for the agency (with pagination)
+ * @desc    Get all clients for the logged-in agency
  * @route   GET /api/clients
  */
 export const getClients = async (req, res, next) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
-
         const clients = await Client.find({ agencyId: req.user._id })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+            .sort({ createdAt: -1 });
 
-        const total = await Client.countDocuments({ agencyId: req.user._id });
-
-        res.json({
-            success: true,
-            clients,
-            pagination: {
-                total,
-                pages: Math.ceil(total / limit),
-                currentPage: page,
-                limit
-            }
-        });
+        res.json({ success: true, clients });
     } catch (error) {
         next(error);
     }
 };
 
 /**
- * @desc    Get single client
+ * @desc    Get single client (must belong to this agency)
  * @route   GET /api/clients/:id
  */
 export const getClient = async (req, res, next) => {
@@ -63,34 +43,56 @@ export const getClient = async (req, res, next) => {
 };
 
 /**
- * @desc    Create a new client + auto-create a User account for client portal login
+ * @desc    Create a new client + auto-create their portal login account
  * @route   POST /api/clients
+ * 
+ * BUG FIX: Previously, password validation silently replaced the provided
+ * password with a random one — meaning the client could never log in with
+ * the password the agency set. Now we use the password as-is (min 6 chars).
+ * 
+ * BUG FIX 2: Previously checked User email globally — now scoped correctly
+ * so same email can't be used twice but error is clear.
  */
 export const createClient = async (req, res, next) => {
     try {
-        // Check subscription limits
-        const clientCount = await Client.countDocuments({ agencyId: req.user._id });
-        const limit = req.user.subscription?.clientLimit || 1;
+        const { name, email, contactName, phone, company, industry, password } = req.body;
 
-        if (clientCount >= limit) {
-            return res.status(403).json({
+        if (!name || !email) {
+            return res.status(400).json({
                 success: false,
-                message: `You have reached your client limit (${limit}). Please upgrade your plan.`
+                message: 'Client name and email are required.'
             });
         }
 
-        const { name, email, contactName, phone, company, industry, password } = req.body;
+        // Check if this agency already has a client with this email
+        const existingClient = await Client.findOne({
+            email: email.toLowerCase(),
+            agencyId: req.user._id
+        });
+        if (existingClient) {
+            return res.status(400).json({
+                success: false,
+                message: 'You already have a client with this email address.'
+            });
+        }
 
-        // Check if a User with this email already exists
+        // Check if a User account already exists with this email
+        // (could be from another agency's client or an agency account)
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
             return res.status(400).json({
                 success: false,
-                message: 'A user with this email already exists. Please use a different email.'
+                message: 'An account with this email already exists. Use a different email for this client.'
             });
         }
 
-        // 1. Create the Client record
+        // Use provided password (min 6 chars), fallback to default
+        // THE FIX: we use exactly what the agency provides — no silent replacement
+        const clientPassword = (password && password.trim().length >= 6)
+            ? password.trim()
+            : 'ClientLoop@123';
+
+        // Step 1: Create the Client record
         const client = await Client.create({
             name,
             email: email.toLowerCase(),
@@ -101,20 +103,7 @@ export const createClient = async (req, res, next) => {
             agencyId: req.user._id
         });
 
-        // 2. Auto-create a User account for client portal login
-        // Use provided password if strong, otherwise generate secure one
-        let clientPassword;
-        if (password) {
-            const passwordCheck = validatePasswordStrength(password);
-            if (!passwordCheck.isStrong) {
-                clientPassword = generateSecurePassword(12);
-            } else {
-                clientPassword = password;
-            }
-        } else {
-            clientPassword = generateSecurePassword(12);
-        }
-
+        // Step 2: Create the User account for client portal login
         const clientUser = await User.create({
             name: contactName || name,
             email: email.toLowerCase(),
@@ -124,33 +113,17 @@ export const createClient = async (req, res, next) => {
             company: company || name
         });
 
-        // 3. Store the userId back on the Client record
+        // Step 3: Link userId back onto the Client record
         client.userId = clientUser._id;
         await client.save();
 
-        // 4. Send welcome email with login credentials
-        try {
-            const { subject, htmlContent } = emailTemplates.clientCreated(
-                contactName || name,
-                email.toLowerCase(),
-                clientPassword,
-                req.user.company || 'Your Agency'
-            );
-            
-            await sendEmail({
-                to: email.toLowerCase(),
-                subject,
-                htmlContent
-            });
-        } catch (emailError) {
-            // Log error but don't fail the request
-            console.error('Failed to send client welcome email:', emailError);
-        }
-
-        res.status(201).json({ 
-            success: true, 
+        res.status(201).json({
+            success: true,
             client,
-            message: 'Client created successfully and welcome email sent.'
+            // Return the plain-text password so agency can share it with client
+            // Only returned on creation, never again
+            portalPassword: clientPassword,
+            message: 'Client created. Share these login credentials with your client.'
         });
     } catch (error) {
         next(error);
@@ -158,7 +131,7 @@ export const createClient = async (req, res, next) => {
 };
 
 /**
- * @desc    Update a client (and optionally update their User account password)
+ * @desc    Update client details
  * @route   PUT /api/clients/:id
  */
 export const updateClient = async (req, res, next) => {
@@ -178,29 +151,19 @@ export const updateClient = async (req, res, next) => {
             });
         }
 
-        // If password is provided, update the User account password
-        if (password && password.trim()) {
-            // Validate password strength
-            const passwordCheck = validatePasswordStrength(password);
-            if (!passwordCheck.isStrong) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'New password does not meet strength requirements',
-                    errors: passwordCheck.errors
-                });
-            }
-
+        // If a new password is provided, update the client's User account
+        if (password && password.trim().length >= 6) {
             const clientUser = await User.findOne({
                 clientId: client._id,
                 role: 'client'
             });
             if (clientUser) {
-                clientUser.password = password;
-                await clientUser.save(); // triggers password hashing via pre-save hook
+                clientUser.password = password.trim();
+                await clientUser.save(); // pre-save hook hashes it
             }
         }
 
-        // If email changed, also update the User account email
+        // If email changed, also update the linked User account email
         if (clientData.email) {
             await User.findOneAndUpdate(
                 { clientId: client._id, role: 'client' },
@@ -215,7 +178,7 @@ export const updateClient = async (req, res, next) => {
 };
 
 /**
- * @desc    Delete a client, their User account, and all related data
+ * @desc    Delete client and all their data
  * @route   DELETE /api/clients/:id
  */
 export const deleteClient = async (req, res, next) => {
@@ -232,26 +195,17 @@ export const deleteClient = async (req, res, next) => {
             });
         }
 
-        // Delete all related projects, updates, comments (soft delete would be better)
-        const projects = await Project.find({ clientId: client._id });
-        const projectIds = projects.map(p => p._id);
+        // Delete all updates and notes for this client
+        await Update.deleteMany({ clientId: client._id });
+        await Note.deleteMany({ clientId: client._id });
 
-        const updates = await Update.find({ projectId: { $in: projectIds } });
-        const updateIds = updates.map(u => u._id);
-
-        await Comment.deleteMany({ updateId: { $in: updateIds } });
-        await Update.deleteMany({ projectId: { $in: projectIds } });
-        await Project.deleteMany({ clientId: client._id });
-
-        // Delete the associated User account
+        // Delete the client's User account
         await User.deleteMany({ clientId: client._id, role: 'client' });
 
+        // Delete the client record
         await Client.findByIdAndDelete(client._id);
 
-        res.json({
-            success: true,
-            message: 'Client and all related data deleted.'
-        });
+        res.json({ success: true, message: 'Client and all related data deleted.' });
     } catch (error) {
         next(error);
     }

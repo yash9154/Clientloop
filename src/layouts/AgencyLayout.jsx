@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
 import {
     LayoutDashboard,
     Users,
-    FolderOpen,
-    CreditCard,
     Settings,
-    Bell,
     LogOut,
     Menu,
     X,
-    Search,
     ChevronDown
 } from 'lucide-react';
 
@@ -23,8 +18,6 @@ function Sidebar({ isOpen, onClose }) {
     const navItems = [
         { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
         { path: '/clients', icon: Users, label: 'Clients' },
-        { path: '/projects', icon: FolderOpen, label: 'Projects' },
-        { path: '/billing', icon: CreditCard, label: 'Billing' },
         { path: '/settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -35,11 +28,7 @@ function Sidebar({ isOpen, onClose }) {
 
     return (
         <>
-            {/* Mobile Overlay */}
-            <div
-                className={`mobile-overlay ${isOpen ? 'visible' : ''}`}
-                onClick={onClose}
-            />
+            <div className={`mobile-overlay ${isOpen ? 'visible' : ''}`} onClick={onClose} />
 
             <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
@@ -53,7 +42,6 @@ function Sidebar({ isOpen, onClose }) {
                         </div>
                         <span className="sidebar-logo-text">ClientLoop</span>
                     </Link>
-
                     <button className="btn-icon mobile-menu-toggle" onClick={onClose}>
                         <X size={20} />
                     </button>
@@ -78,12 +66,10 @@ function Sidebar({ isOpen, onClose }) {
 
                 <div className="sidebar-footer">
                     <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--space-3)',
-                        padding: 'var(--space-3)',
+                        display: 'flex', alignItems: 'center',
+                        gap: 'var(--space-3)', padding: 'var(--space-3)',
                         borderRadius: 'var(--radius-lg)',
-                        background: 'rgba(255, 255, 255, 0.1)'
+                        background: 'rgba(255,255,255,0.1)'
                     }}>
                         <div className="avatar avatar-sm avatar-gradient">
                             {user?.name?.charAt(0) || 'U'}
@@ -92,25 +78,16 @@ function Sidebar({ isOpen, onClose }) {
                             <div style={{
                                 fontSize: 'var(--font-size-sm)',
                                 fontWeight: 'var(--font-weight-medium)',
-                                color: 'white',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
+                                color: 'white', whiteSpace: 'nowrap',
+                                overflow: 'hidden', textOverflow: 'ellipsis'
                             }}>
                                 {user?.name}
                             </div>
-                            <div style={{
-                                fontSize: 'var(--font-size-xs)',
-                                color: 'rgba(255, 255, 255, 0.6)'
-                            }}>
-                                {user?.company}
+                            <div style={{ fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.6)' }}>
+                                {user?.company || 'Agency'}
                             </div>
                         </div>
-                        <button
-                            onClick={() => logout()}
-                            className="btn-icon"
-                            style={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                        >
+                        <button onClick={logout} className="btn-icon" style={{ color: 'rgba(255,255,255,0.7)' }}>
                             <LogOut size={18} />
                         </button>
                     </div>
@@ -122,11 +99,7 @@ function Sidebar({ isOpen, onClose }) {
 
 function Header({ onMenuClick }) {
     const { user, logout } = useAuth();
-    const { getUnreadCount, notifications, markNotificationRead, markAllNotificationsRead } = useData();
-    const [showNotifications, setShowNotifications] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
-
-    const unreadCount = getUnreadCount();
 
     return (
         <header className="main-header">
@@ -134,95 +107,9 @@ function Header({ onMenuClick }) {
                 <button className="mobile-menu-toggle" onClick={onMenuClick}>
                     <Menu size={24} />
                 </button>
-
-                <div className="search-input-wrapper" style={{ display: 'none' }}>
-                    <Search size={18} className="search-input-icon" />
-                    <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Search clients, projects..."
-                        style={{ paddingLeft: '40px' }}
-                    />
-                </div>
             </div>
 
             <div className="main-header-right">
-                {/* Notifications */}
-                <div className="dropdown" style={{ position: 'relative' }}>
-                    <button
-                        className="btn btn-ghost btn-icon"
-                        onClick={() => setShowNotifications(!showNotifications)}
-                        style={{ position: 'relative' }}
-                    >
-                        <Bell size={20} />
-                        {unreadCount > 0 && (
-                            <span className="notification-dot" />
-                        )}
-                    </button>
-
-                    {showNotifications && (
-                        <div className="dropdown-menu" style={{ width: '360px', right: 0 }}>
-                            <div style={{
-                                padding: 'var(--space-3) var(--space-4)',
-                                borderBottom: '1px solid var(--border-light)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <span style={{ fontWeight: 'var(--font-weight-semibold)' }}>Notifications</span>
-                                {unreadCount > 0 && (
-                                    <button
-                                        className="btn btn-ghost btn-sm"
-                                        onClick={() => markAllNotificationsRead()}
-                                    >
-                                        Mark all read
-                                    </button>
-                                )}
-                            </div>
-                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {notifications.length === 0 ? (
-                                    <div style={{
-                                        padding: 'var(--space-6)',
-                                        textAlign: 'center',
-                                        color: 'var(--text-tertiary)'
-                                    }}>
-                                        No notifications
-                                    </div>
-                                ) : (
-                                    notifications.slice(0, 5).map((notif) => (
-                                        <div
-                                            key={notif.id}
-                                            className="dropdown-item"
-                                            onClick={() => markNotificationRead(notif.id)}
-                                            style={{
-                                                padding: 'var(--space-3) var(--space-4)',
-                                                background: notif.read ? 'transparent' : 'var(--color-primary-50)'
-                                            }}
-                                        >
-                                            <div>
-                                                <div style={{
-                                                    fontWeight: 'var(--font-weight-medium)',
-                                                    fontSize: 'var(--font-size-sm)'
-                                                }}>
-                                                    {notif.title}
-                                                </div>
-                                                <div style={{
-                                                    fontSize: 'var(--font-size-xs)',
-                                                    color: 'var(--text-tertiary)',
-                                                    marginTop: 'var(--space-1)'
-                                                }}>
-                                                    {notif.message}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* User Menu */}
                 <div className="dropdown" style={{ position: 'relative' }}>
                     <button
                         className="btn btn-ghost"
@@ -232,25 +119,20 @@ function Header({ onMenuClick }) {
                         <div className="avatar avatar-sm avatar-gradient">
                             {user?.name?.charAt(0) || 'U'}
                         </div>
-                        <span className="sm:hidden" style={{
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: 'var(--font-weight-medium)'
-                        }}>
+                        <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-medium)' }}>
                             {user?.name?.split(' ')[0]}
                         </span>
                         <ChevronDown size={16} />
                     </button>
 
                     {showUserMenu && (
-                        <div className="dropdown-menu">
-                            <Link to="/settings" className="dropdown-item">
-                                <Settings size={16} />
-                                Settings
+                        <div className="dropdown-menu" style={{ right: 0 }}>
+                            <Link to="/settings" className="dropdown-item" onClick={() => setShowUserMenu(false)}>
+                                <Settings size={16} /> Settings
                             </Link>
                             <div className="dropdown-divider" />
-                            <button className="dropdown-item danger" onClick={() => logout()}>
-                                <LogOut size={16} />
-                                Sign Out
+                            <button className="dropdown-item danger" onClick={logout}>
+                                <LogOut size={16} /> Sign Out
                             </button>
                         </div>
                     )}

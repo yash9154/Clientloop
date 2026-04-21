@@ -1,86 +1,101 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import {
-    User,
-    Mail,
-    Building2,
-    Bell,
-    Lock,
-    Palette,
-    Save,
-    Camera
-} from 'lucide-react';
+import { apiUpdateProfile, apiChangePassword } from '../../api/auth.js';
+import { User, Mail, Building2, Lock, Save, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('profile');
 
-    // Profile form state
-    const [name, setName] = useState(user?.name || '');
-    const [email, setEmail] = useState(user?.email || '');
+    // Profile
+    const [name, setName]       = useState(user?.name || '');
     const [company, setCompany] = useState(user?.company || '');
+    const [profileSaving, setProfileSaving] = useState(false);
+    const [profileMsg, setProfileMsg]       = useState('');
+    const [profileError, setProfileError]   = useState('');
 
-    // Notification settings
-    const [notifications, setNotifications] = useState({
-        emailUpdates: true,
-        emailApprovals: true,
-        emailComments: true,
-        emailDigest: false
-    });
+    // Password
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword]         = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showCurrent, setShowCurrent]         = useState(false);
+    const [showNew, setShowNew]                 = useState(false);
+    const [passwordSaving, setPasswordSaving]   = useState(false);
+    const [passwordMsg, setPasswordMsg]         = useState('');
+    const [passwordError, setPasswordError]     = useState('');
 
     const tabs = [
-        { id: 'profile', label: 'Profile', icon: User },
-        { id: 'notifications', label: 'Notifications', icon: Bell },
+        { id: 'profile',  label: 'Profile',  icon: User },
         { id: 'security', label: 'Security', icon: Lock },
-        { id: 'branding', label: 'Branding', icon: Palette }
     ];
+
+    const handleProfileSave = async (e) => {
+        e.preventDefault();
+        setProfileSaving(true); setProfileMsg(''); setProfileError('');
+        try {
+            await apiUpdateProfile({ name, company });
+            setProfileMsg('Profile updated successfully.');
+        } catch (err) {
+            setProfileError(err.message || 'Failed to update profile.');
+        } finally {
+            setProfileSaving(false);
+        }
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        setPasswordMsg(''); setPasswordError('');
+        if (newPassword.length < 6) { setPasswordError('New password must be at least 6 characters.'); return; }
+        if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match.'); return; }
+        setPasswordSaving(true);
+        try {
+            await apiChangePassword(currentPassword, newPassword);
+            setPasswordMsg('Password changed successfully.');
+            setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+        } catch (err) {
+            setPasswordError(err.message || 'Failed to change password.');
+        } finally {
+            setPasswordSaving(false);
+        }
+    };
 
     return (
         <div>
             <div className="page-header">
                 <h1 className="page-title">Settings</h1>
-                <p className="page-subtitle">Manage your account and preferences</p>
+                <p className="page-subtitle">Manage your account</p>
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap' }}>
-                {/* Sidebar Tabs */}
-                <div style={{ width: '200px', flexShrink: 0 }} className="md:hidden">
+                {/* Tab sidebar */}
+                <div style={{ width: '180px', flexShrink: 0 }}>
                     <div className="card">
                         <div style={{ padding: 'var(--space-2)' }}>
-                            {tabs.map((tab) => (
+                            {tabs.map(tab => (
                                 <button
                                     key={tab.id}
-                                    className={`sidebar-link ${activeTab === tab.id ? 'active' : ''}`}
                                     onClick={() => setActiveTab(tab.id)}
                                     style={{
-                                        width: '100%',
+                                        width: '100%', display: 'flex', alignItems: 'center',
+                                        gap: 'var(--space-2)', padding: 'var(--space-3)',
+                                        borderRadius: 'var(--radius-lg)', border: 'none',
+                                        cursor: 'pointer', fontSize: 'var(--font-size-sm)',
+                                        fontWeight: 'var(--font-weight-medium)',
                                         background: activeTab === tab.id ? 'var(--color-primary-50)' : 'transparent',
-                                        color: activeTab === tab.id ? 'var(--color-primary-600)' : 'var(--text-secondary)'
+                                        color: activeTab === tab.id ? 'var(--color-primary-600)' : 'var(--text-secondary)',
+                                        transition: 'all var(--transition-fast)'
                                     }}
                                 >
-                                    <tab.icon size={18} />
-                                    {tab.label}
+                                    <tab.icon size={16} /> {tab.label}
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Mobile Tabs */}
-                <div className="tabs md:flex" style={{ display: 'none', marginBottom: 'var(--space-4)', width: '100%' }}>
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: '300px' }}>
+
                     {/* Profile Tab */}
                     {activeTab === 'profile' && (
                         <div className="card animate-fade-in">
@@ -91,156 +106,58 @@ export default function SettingsPage() {
                             </div>
                             <div className="card-body">
                                 {/* Avatar */}
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-4)',
-                                    marginBottom: 'var(--space-6)'
-                                }}>
-                                    <div
-                                        className="avatar avatar-xl avatar-gradient"
-                                        style={{ fontSize: 'var(--font-size-2xl)' }}
-                                    >
-                                        {name.charAt(0)}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                                    <div className="avatar avatar-xl avatar-gradient" style={{ fontSize: 'var(--font-size-2xl)' }}>
+                                        {(name || 'U').charAt(0).toUpperCase()}
                                     </div>
                                     <div>
-                                        <button className="btn btn-secondary btn-sm">
-                                            <Camera size={14} />
-                                            Change Photo
-                                        </button>
-                                        <p style={{
-                                            fontSize: 'var(--font-size-xs)',
-                                            color: 'var(--text-tertiary)',
-                                            marginTop: 'var(--space-2)'
-                                        }}>
-                                            JPG or PNG. Max 2MB.
-                                        </p>
+                                        <div style={{ fontWeight: 'var(--font-weight-semibold)' }}>{user?.name}</div>
+                                        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)' }}>{user?.email}</div>
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-4)' }} className="md:grid-cols-1">
+                                {profileMsg && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', background: 'var(--color-success-50)', border: '1px solid var(--color-success-100)', borderRadius: 'var(--radius-lg)', color: 'var(--color-success-700)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-4)' }}>
+                                        <CheckCircle size={16} /> {profileMsg}
+                                    </div>
+                                )}
+                                {profileError && (
+                                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-lg)', color: 'var(--color-error-600)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-4)' }}>
+                                        {profileError}
+                                    </div>
+                                )}
+
+                                <form onSubmit={handleProfileSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Full Name</label>
                                         <div style={{ position: 'relative' }}>
-                                            <User size={18} style={{
-                                                position: 'absolute',
-                                                left: '14px',
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                color: 'var(--text-muted)'
-                                            }} />
-                                            <input
-                                                type="text"
-                                                className="form-input"
-                                                value={name}
-                                                onChange={(e) => setName(e.target.value)}
-                                                style={{ paddingLeft: '44px' }}
-                                            />
+                                            <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input type="text" className="form-input" value={name} onChange={e => setName(e.target.value)} style={{ paddingLeft: '44px' }} required />
                                         </div>
                                     </div>
 
                                     <div className="form-group">
-                                        <label className="form-label">Email Address</label>
+                                        <label className="form-label">Email Address <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 'var(--font-size-xs)' }}>(cannot be changed)</span></label>
                                         <div style={{ position: 'relative' }}>
-                                            <Mail size={18} style={{
-                                                position: 'absolute',
-                                                left: '14px',
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                color: 'var(--text-muted)'
-                                            }} />
-                                            <input
-                                                type="email"
-                                                className="form-input"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                style={{ paddingLeft: '44px' }}
-                                            />
+                                            <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input type="email" className="form-input" value={user?.email || ''} style={{ paddingLeft: '44px', background: 'var(--bg-secondary)', color: 'var(--text-muted)' }} readOnly />
                                         </div>
                                     </div>
 
-                                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                    <div className="form-group">
                                         <label className="form-label">Company Name</label>
                                         <div style={{ position: 'relative' }}>
-                                            <Building2 size={18} style={{
-                                                position: 'absolute',
-                                                left: '14px',
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                color: 'var(--text-muted)'
-                                            }} />
-                                            <input
-                                                type="text"
-                                                className="form-input"
-                                                value={company}
-                                                onChange={(e) => setCompany(e.target.value)}
-                                                style={{ paddingLeft: '44px' }}
-                                            />
+                                            <Building2 size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input type="text" className="form-input" value={company} onChange={e => setCompany(e.target.value)} placeholder="Your agency name" style={{ paddingLeft: '44px' }} />
                                         </div>
                                     </div>
-                                </div>
 
-                                <div style={{ marginTop: 'var(--space-6)' }}>
-                                    <button className="btn btn-primary">
-                                        <Save size={16} />
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Notifications Tab */}
-                    {activeTab === 'notifications' && (
-                        <div className="card animate-fade-in">
-                            <div className="card-header">
-                                <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
-                                    Email Notifications
-                                </h2>
-                            </div>
-                            <div className="card-body">
-                                <p style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-6)' }}>
-                                    Choose which notifications you'd like to receive.
-                                </p>
-
-                                {[
-                                    { key: 'emailUpdates', label: 'Project Updates', description: 'Get notified when a new update is posted' },
-                                    { key: 'emailApprovals', label: 'Approval Requests', description: 'Get notified when approval is given or changes are requested' },
-                                    { key: 'emailComments', label: 'New Comments', description: 'Get notified when someone comments on your updates' },
-                                    { key: 'emailDigest', label: 'Weekly Digest', description: 'Receive a weekly summary of all activity' }
-                                ].map((item) => (
-                                    <label
-                                        key={item.key}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            gap: 'var(--space-4)',
-                                            padding: 'var(--space-4)',
-                                            borderBottom: '1px solid var(--border-light)',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={notifications[item.key]}
-                                            onChange={(e) => setNotifications({ ...notifications, [item.key]: e.target.checked })}
-                                            style={{ width: '20px', height: '20px', marginTop: '2px' }}
-                                        />
-                                        <div>
-                                            <div style={{ fontWeight: 'var(--font-weight-medium)' }}>{item.label}</div>
-                                            <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)' }}>
-                                                {item.description}
-                                            </div>
-                                        </div>
-                                    </label>
-                                ))}
-
-                                <div style={{ marginTop: 'var(--space-6)' }}>
-                                    <button className="btn btn-primary">
-                                        <Save size={16} />
-                                        Save Preferences
-                                    </button>
-                                </div>
+                                    <div>
+                                        <button type="submit" className="btn btn-primary" disabled={profileSaving}>
+                                            {profileSaving ? 'Saving...' : <><Save size={16} /> Save Changes</>}
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     )}
@@ -250,88 +167,55 @@ export default function SettingsPage() {
                         <div className="card animate-fade-in">
                             <div className="card-header">
                                 <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
-                                    Security Settings
+                                    Change Password
                                 </h2>
                             </div>
                             <div className="card-body">
-                                <div style={{ marginBottom: 'var(--space-6)' }}>
-                                    <h3 style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--space-3)' }}>
-                                        Change Password
-                                    </h3>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '400px' }}>
-                                        <div className="form-group">
-                                            <label className="form-label">Current Password</label>
-                                            <input type="password" className="form-input" />
+                                {passwordMsg && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3)', background: 'var(--color-success-50)', border: '1px solid var(--color-success-100)', borderRadius: 'var(--radius-lg)', color: 'var(--color-success-700)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-4)' }}>
+                                        <CheckCircle size={16} /> {passwordMsg}
+                                    </div>
+                                )}
+                                {passwordError && (
+                                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-lg)', color: 'var(--color-error-600)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--space-4)' }}>
+                                        {passwordError}
+                                    </div>
+                                )}
+
+                                <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '400px' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Current Password</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input type={showCurrent ? 'text' : 'password'} className="form-input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} style={{ paddingRight: '44px' }} required />
+                                            <button type="button" onClick={() => setShowCurrent(!showCurrent)}
+                                                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                                                {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="form-label">New Password</label>
-                                            <input type="password" className="form-input" />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">New Password</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input type={showNew ? 'text' : 'password'} className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ paddingRight: '44px' }} required />
+                                            <button type="button" onClick={() => setShowNew(!showNew)}
+                                                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                                                {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="form-label">Confirm New Password</label>
-                                            <input type="password" className="form-input" />
-                                        </div>
-                                        <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
-                                            Update Password
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label className="form-label">Confirm New Password</label>
+                                        <input type="password" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+                                    </div>
+
+                                    <div>
+                                        <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+                                            {passwordSaving ? 'Updating...' : <><Save size={16} /> Update Password</>}
                                         </button>
                                     </div>
-                                </div>
-
-                                <div style={{
-                                    borderTop: '1px solid var(--border-light)',
-                                    paddingTop: 'var(--space-6)',
-                                    marginTop: 'var(--space-6)'
-                                }}>
-                                    <h3 style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--space-2)' }}>
-                                        Two-Factor Authentication
-                                    </h3>
-                                    <p style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
-                                        Add an extra layer of security to your account.
-                                    </p>
-                                    <button className="btn btn-secondary">
-                                        Enable 2FA
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Branding Tab */}
-                    {activeTab === 'branding' && (
-                        <div className="card animate-fade-in">
-                            <div className="card-header">
-                                <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>
-                                    Branding
-                                </h2>
-                            </div>
-                            <div className="card-body">
-                                <div style={{
-                                    padding: 'var(--space-6)',
-                                    background: 'var(--bg-secondary)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    textAlign: 'center'
-                                }}>
-                                    <div style={{
-                                        width: '64px',
-                                        height: '64px',
-                                        background: 'var(--color-primary-100)',
-                                        borderRadius: 'var(--radius-full)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        margin: '0 auto var(--space-4)',
-                                        color: 'var(--color-primary-600)'
-                                    }}>
-                                        <Palette size={28} />
-                                    </div>
-                                    <h3 style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--space-2)' }}>
-                                        Custom Branding
-                                    </h3>
-                                    <p style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
-                                        Add your logo and brand colors to the client portal.
-                                    </p>
-                                    <span className="badge badge-primary">Available on Starter & Agency plans</span>
-                                </div>
+                                </form>
                             </div>
                         </div>
                     )}

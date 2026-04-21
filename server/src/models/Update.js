@@ -1,35 +1,26 @@
 import mongoose from 'mongoose';
 
-const fileSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    url: { type: String, required: true },
-    size: { type: String, default: '' },
-    sizeBytes: { type: Number, default: 0 },
-    type: { type: String, default: 'file' },
-    publicId: { type: String, default: '' }, // Cloudinary public ID
-    uploadedAt: { type: Date, default: Date.now }
-}, { _id: false });
-
 const updateSchema = new mongoose.Schema({
     title: {
         type: String,
-        required: [true, 'Update title is required'],
+        required: [true, 'Title is required'],
         trim: true,
         maxlength: 300
     },
     content: {
         type: String,
-        trim: true,
-        default: ''
+        required: [true, 'Content is required'],
+        trim: true
     },
     type: {
         type: String,
         enum: ['progress', 'milestone', 'delivery'],
         default: 'progress'
     },
-    projectId: {
+    // Linked directly to client — no projects layer
+    clientId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Project',
+        ref: 'Client',
         required: true,
         index: true
     },
@@ -39,10 +30,12 @@ const updateSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    author: {
+    // Author display name
+    authorName: {
         type: String,
         default: ''
     },
+    // Approval workflow
     requiresApproval: {
         type: Boolean,
         default: false
@@ -60,19 +53,14 @@ const updateSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    changeRequestedBy: {
+    changeRequestNote: {
         type: String,
         default: null
     },
     changeRequestedAt: {
         type: Date,
         default: null
-    },
-    changeRequestNote: {
-        type: String,
-        default: ''
-    },
-    files: [fileSchema]
+    }
 }, {
     timestamps: true
 });
