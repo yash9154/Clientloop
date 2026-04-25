@@ -1,200 +1,132 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
-import { useAuth } from '../../context/AuthContext';
 import {
-    ArrowLeft,
-    Plus,
-    FileText,
-    Image,
-    File,
-    Download,
-    Send,
-    CheckCircle2,
-    Clock,
-    AlertCircle,
-    MessageSquare,
-    Paperclip,
-    Upload,
-    X,
-    MoreHorizontal,
-    ChevronDown
+    ArrowLeft, Plus, Send, X, Trash2, FileText,
+    CheckCircle2, Clock, AlertCircle, Paperclip,
+    Download, Image, File, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-function StatusBadge({ status }) {
-    const config = {
-        'not-started': { label: 'Not Started', class: 'badge-not-started' },
-        'in-progress': { label: 'In Progress', class: 'badge-in-progress' },
-        'waiting-approval': { label: 'Waiting for Approval', class: 'badge-waiting' },
-        'completed': { label: 'Completed', class: 'badge-completed' }
-    };
+// ── HELPERS ───────────────────────────────────────────────────────
 
-    const { label, class: className } = config[status] || config['not-started'];
+const formatDate = (d) => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+const formatTime = (d) => {
+    const diff = Date.now()-new Date(d), m=Math.floor(diff/60000), h=Math.floor(m/60), days=Math.floor(h/24);
+    if(m<1) return 'Just now'; if(m<60) return `${m}m ago`;
+    if(h<24) return `${h}h ago`; if(days===1) return 'Yesterday';
+    return formatDate(d);
+};
 
-    return <span className={`badge ${className}`}>{label}</span>;
+const approvalStyle = {
+    none:               { bg:'var(--color-gray-100)',    text:'var(--color-gray-600)',    label:'No Approval Needed'  },
+    pending:            { bg:'var(--color-warning-100)', text:'var(--color-warning-700)', label:'Pending Approval'    },
+    approved:           { bg:'var(--color-success-100)', text:'var(--color-success-700)', label:'Approved'            },
+    'changes-requested':{ bg:'var(--color-error-100)',   text:'var(--color-error-700)',   label:'Changes Requested'   },
+};
+const typeColor = { progress:'#3b82f6', milestone:'#8b5cf6', delivery:'#10b981' };
+
+function formatBytes(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024*1024) return `${(bytes/1024).toFixed(1)} KB`;
+    return `${(bytes/1024/1024).toFixed(1)} MB`;
 }
 
-function ApprovalBadge({ status }) {
-    const config = {
-        'pending': { label: 'Pending Approval', class: 'badge-pending', icon: Clock },
-        'approved': { label: 'Approved', class: 'badge-approved', icon: CheckCircle2 },
-        'changes-requested': { label: 'Changes Requested', class: 'badge-changes', icon: AlertCircle }
-    };
+// ── POST UPDATE MODAL ─────────────────────────────────────────────
 
-    const { label, class: className, icon: Icon } = config[status] || {};
-
-    if (!status) return null;
-
-    return (
-        <span className={`badge ${className}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <Icon size={12} />
-            {label}
-        </span>
-    );
-}
-
-function PostUpdateModal({ isOpen, onClose, onSubmit }) {
-    const { user } = useAuth();
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [requiresApproval, setRequiresApproval] = useState(false);
-    const [files, setFiles] = useState([]);
+function PostUpdateModal({ isOpen, onClose, projectId, onCreated }) {
+    const { addUpdate } = useData();
+    const [form,    setForm]    = useState({ title:'', content:'', type:'progress', requiresApproval:false });
+    const [files,   setFiles]   = useState([]);
+    const [saving,  setSaving]  = useState(false);
+    const [error,   setError]   = useState('');
+    const fileRef = useRef(null);
 
     if (!isOpen) return null;
+    const set = f => e => setForm(p=>({...p,[f]:e.target.value}));
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSubmit({
-            title,
-            content,
-            requiresApproval,
-            author: user?.name,
-            authorRole: 'agency',
-            type: 'progress',
-            attachments: files.map((f, i) => ({
-                id: `file-new-${i}`,
-                name: f.name,
-                size: `${(f.size / 1024).toFixed(1)} KB`,
-                type: f.type.includes('image') ? 'image' : 'pdf'
-            }))
-        });
-        setTitle('');
-        setContent('');
-        setRequiresApproval(false);
-        setFiles([]);
-        onClose();
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setSaving(true); setError('');
+        try {
+            const update = await addUpdate({ ...form, projectId }, files);
+            onCreated(update);
+            setForm({ title:'', content:'', type:'progress', requiresApproval:false });
+            setFiles([]); onClose();
+        } catch(err) { setError(err.message||'Failed to post update'); }
+        finally { setSaving(false); }
     };
+
+    const removeFile = (idx) => setFiles(prev => prev.filter((_,i)=>i!==idx));
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal modal-lg" onClick={e=>e.stopPropagation()}>
                 <div className="modal-header">
                     <h2 className="modal-title">Post Update</h2>
-                    <button className="modal-close" onClick={onClose}>
-                        <X size={20} />
-                    </button>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={20}/></button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="modal-body">
-                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                    <div className="modal-body" style={{display:'flex',flexDirection:'column',gap:'var(--space-4)'}}>
+                        {error && <div style={{padding:'var(--space-3)',background:'var(--color-error-50)',border:'1px solid var(--color-error-100)',borderRadius:'var(--radius-lg)',color:'var(--color-error-600)',fontSize:'var(--font-size-sm)'}}>{error}</div>}
+
+                        <div className="form-group">
                             <label className="form-label required">Title</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="e.g., Homepage Design Completed"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                required
-                            />
+                            <input className="form-input" placeholder="e.g. Homepage design completed" value={form.title} onChange={set('title')} required/>
                         </div>
-                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                            <label className="form-label required">Update Content</label>
-                            <textarea
-                                className="form-input form-textarea"
-                                placeholder="Describe the update in detail..."
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                rows={5}
-                                required
-                            />
+                        <div className="form-group">
+                            <label className="form-label required">Content</label>
+                            <textarea className="form-input form-textarea" placeholder="Describe the update..." value={form.content} onChange={set('content')} rows={4} required/>
                         </div>
 
-                        {/* File Upload */}
-                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                            <label className="form-label">Attachments</label>
-                            <div className="file-upload">
-                                <input
-                                    type="file"
-                                    multiple
-                                    onChange={(e) => setFiles([...files, ...Array.from(e.target.files)])}
-                                    style={{ display: 'none' }}
-                                    id="file-upload"
-                                />
-                                <label htmlFor="file-upload" style={{ cursor: 'pointer' }}>
-                                    <Upload size={24} style={{ margin: '0 auto var(--space-2)', color: 'var(--text-tertiary)' }} />
-                                    <p style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--text-primary)' }}>
-                                        Click to upload or drag and drop
-                                    </p>
-                                    <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)' }}>
-                                        PDF, PNG, JPG up to 10MB
-                                    </p>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'var(--space-4)'}}>
+                            <div className="form-group">
+                                <label className="form-label">Update Type</label>
+                                <select className="form-input form-select" value={form.type} onChange={set('type')}>
+                                    <option value="progress">Progress</option>
+                                    <option value="milestone">Milestone</option>
+                                    <option value="delivery">Delivery</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Requires Approval?</label>
+                                <label style={{display:'flex',alignItems:'center',gap:'var(--space-2)',cursor:'pointer',marginTop:'var(--space-2)'}}>
+                                    <input type="checkbox" checked={form.requiresApproval} onChange={e=>setForm(p=>({...p,requiresApproval:e.target.checked}))}/>
+                                    <span style={{fontSize:'var(--font-size-sm)'}}>Ask client to approve</span>
                                 </label>
                             </div>
+                        </div>
+
+                        {/* File upload */}
+                        <div>
+                            <label className="form-label" style={{marginBottom:'var(--space-2)'}}>Attachments</label>
+                            <div
+                                style={{border:'2px dashed var(--border-medium)',borderRadius:'var(--radius-lg)',padding:'var(--space-4)',textAlign:'center',cursor:'pointer',background:'var(--bg-secondary)'}}
+                                onClick={()=>fileRef.current?.click()}
+                            >
+                                <Paperclip size={20} style={{margin:'0 auto var(--space-2)',color:'var(--text-muted)'}}/>
+                                <p style={{fontSize:'var(--font-size-sm)',color:'var(--text-tertiary)'}}>Click to attach files</p>
+                                <p style={{fontSize:'var(--font-size-xs)',color:'var(--text-muted)'}}>Images, Videos, PDFs, Word, Excel, PowerPoint, Text — max 50MB each</p>
+                            </div>
+                            <input ref={fileRef} type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" style={{display:'none'}} onChange={e=>setFiles(prev=>[...prev,...Array.from(e.target.files)])}/>
+
                             {files.length > 0 && (
-                                <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    {files.map((file, index) => (
-                                        <div key={index} className="file-item">
-                                            <div className="file-item-icon">
-                                                <FileText size={18} />
-                                            </div>
-                                            <div className="file-item-info">
-                                                <div className="file-item-name">{file.name}</div>
-                                                <div className="file-item-size">{(file.size / 1024).toFixed(1)} KB</div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className="btn btn-ghost btn-icon"
-                                                onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                                            >
-                                                <X size={16} />
-                                            </button>
+                                <div style={{marginTop:'var(--space-3)',display:'flex',flexDirection:'column',gap:'var(--space-2)'}}>
+                                    {files.map((f,i) => (
+                                        <div key={i} style={{display:'flex',alignItems:'center',gap:'var(--space-3)',padding:'var(--space-2) var(--space-3)',background:'var(--bg-secondary)',borderRadius:'var(--radius-md)',border:'1px solid var(--border-light)'}}>
+                                            <FileText size={16} style={{color:'var(--color-primary-500)',flexShrink:0}}/>
+                                            <span style={{flex:1,fontSize:'var(--font-size-sm)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+                                            <span style={{fontSize:'var(--font-size-xs)',color:'var(--text-muted)'}}>{formatBytes(f.size)}</span>
+                                            <button type="button" className="btn btn-ghost btn-icon" style={{width:'24px',height:'24px'}} onClick={()=>removeFile(i)}><X size={12}/></button>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </div>
-
-                        {/* Approval Checkbox */}
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-3)',
-                            padding: 'var(--space-4)',
-                            background: 'var(--bg-secondary)',
-                            borderRadius: 'var(--radius-lg)',
-                            cursor: 'pointer'
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={requiresApproval}
-                                onChange={(e) => setRequiresApproval(e.target.checked)}
-                                style={{ width: '18px', height: '18px' }}
-                            />
-                            <div>
-                                <div style={{ fontWeight: 'var(--font-weight-medium)' }}>Request Approval</div>
-                                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)' }}>
-                                    Client will be asked to approve or request changes
-                                </div>
-                            </div>
-                        </label>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            <Send size={16} />
-                            Post Update
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                            {saving ? 'Posting...' : <><Send size={16}/> Post Update</>}
                         </button>
                     </div>
                 </form>
@@ -203,217 +135,171 @@ function PostUpdateModal({ isOpen, onClose, onSubmit }) {
     );
 }
 
-function UpdateCard({ update, onAddComment, comments }) {
-    const { user } = useAuth();
-    const [showComments, setShowComments] = useState(false);
-    const [newComment, setNewComment] = useState('');
+// ── COMMENTS SECTION ──────────────────────────────────────────────
 
-    const formatDateTime = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-        });
+function CommentsSection({ updateId }) {
+    const { getCommentsByUpdate, addComment, deleteComment } = useData();
+    const { user } = { user: JSON.parse(localStorage.getItem('clientloop_user') || 'null') };
+    const [comments,    setComments]    = useState([]);
+    const [loading,     setLoading]     = useState(false);
+    const [content,     setContent]     = useState('');
+    const [submitting,  setSubmitting]  = useState(false);
+
+    // Get user from auth context via a simple import
+    const authUser = (() => { try { return JSON.parse(localStorage.getItem('clientloop_user') || 'null'); } catch { return null; } })();
+
+    useEffect(() => {
+        const fetch = async () => {
+            setLoading(true);
+            const data = await getCommentsByUpdate(updateId);
+            setComments(data); setLoading(false);
+        };
+        fetch();
+    }, [updateId]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!content.trim()) return;
+        setSubmitting(true);
+        try {
+            const comment = await addComment(updateId, content.trim());
+            setComments(prev => [...prev, comment]); setContent('');
+        } finally { setSubmitting(false); }
     };
 
-    const handleAddComment = () => {
-        if (newComment.trim()) {
-            onAddComment({
-                updateId: update._id || update.id,
-                author: user?.name,
-                authorRole: user?.role,
-                content: newComment
-            });
-            setNewComment('');
-        }
-    };
-
-    const getFileIcon = (type) => {
-        switch (type) {
-            case 'image':
-                return <Image size={18} />;
-            case 'pdf':
-                return <FileText size={18} />;
-            default:
-                return <File size={18} />;
-        }
+    const handleDelete = async (commentId) => {
+        await deleteComment(commentId);
+        setComments(prev => prev.filter(c => c._id !== commentId));
     };
 
     return (
-        <div className="card animate-fade-in-up" style={{ marginBottom: 'var(--space-4)' }}>
-            <div className="card-body">
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
-                    <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                        <div className="avatar avatar-md avatar-gradient">
-                            {update.author?.charAt(0)}
-                        </div>
-                        <div>
-                            <div style={{ fontWeight: 'var(--font-weight-medium)' }}>{update.author}</div>
-                            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
-                                {formatDateTime(update.createdAt)}
+        <div>
+            {loading ? (
+                <p style={{fontSize:'var(--font-size-sm)',color:'var(--text-tertiary)',padding:'var(--space-4)'}}>Loading comments...</p>
+            ) : comments.length === 0 ? (
+                <p style={{fontSize:'var(--font-size-sm)',color:'var(--text-tertiary)',padding:'var(--space-3) 0'}}>No comments yet. Start the discussion.</p>
+            ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'var(--space-3)',marginBottom:'var(--space-4)'}}>
+                    {comments.map(c => (
+                        <div key={c._id} style={{display:'flex',gap:'var(--space-3)'}}>
+                            <div className="avatar avatar-sm" style={{background: c.authorRole==='agency'?'var(--color-primary-500)':'var(--color-success-500)',color:'white',flexShrink:0}}>
+                                {(c.authorName||'?').charAt(0).toUpperCase()}
                             </div>
-                        </div>
-                    </div>
-                    {update.approvalStatus && (
-                        <ApprovalBadge status={update.approvalStatus} />
-                    )}
-                </div>
-
-                {/* Title & Content */}
-                <h3 style={{
-                    fontSize: 'var(--font-size-lg)',
-                    fontWeight: 'var(--font-weight-semibold)',
-                    marginBottom: 'var(--space-3)'
-                }}>
-                    {update.title}
-                </h3>
-                <p style={{
-                    color: 'var(--text-secondary)',
-                    lineHeight: 'var(--line-height-relaxed)',
-                    whiteSpace: 'pre-wrap'
-                }}>
-                    {update.content}
-                </p>
-
-                {/* Change Request Note */}
-                {update.approvalStatus === 'changes-requested' && update.changeRequestNote && (
-                    <div style={{
-                        marginTop: 'var(--space-4)',
-                        padding: 'var(--space-4)',
-                        background: 'var(--color-warning-50)',
-                        border: '1px solid var(--color-warning-200)',
-                        borderRadius: 'var(--radius-lg)'
-                    }}>
-                        <div style={{
-                            fontWeight: 'var(--font-weight-medium)',
-                            color: 'var(--color-warning-700)',
-                            marginBottom: 'var(--space-2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-2)'
-                        }}>
-                            <AlertCircle size={16} />
-                            Changes Requested by {update.changeRequestedBy}
-                        </div>
-                        <p style={{ color: 'var(--color-warning-600)', fontSize: 'var(--font-size-sm)' }}>
-                            {update.changeRequestNote}
-                        </p>
-                    </div>
-                )}
-
-                {/* Approval Success */}
-                {update.approvalStatus === 'approved' && (
-                    <div style={{
-                        marginTop: 'var(--space-4)',
-                        padding: 'var(--space-4)',
-                        background: 'var(--color-success-50)',
-                        border: '1px solid var(--color-success-200)',
-                        borderRadius: 'var(--radius-lg)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--space-3)'
-                    }}>
-                        <CheckCircle2 size={20} style={{ color: 'var(--color-success-600)' }} />
-                        <div>
-                            <div style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--color-success-700)' }}>
-                                Approved by {update.approvedBy}
-                            </div>
-                            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-success-600)' }}>
-                                {formatDateTime(update.approvedAt)}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Attachments */}
-                {update.attachments?.length > 0 && (
-                    <div style={{ marginTop: 'var(--space-4)' }}>
-                        <div style={{
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: 'var(--font-weight-medium)',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-2)'
-                        }}>
-                            Attachments
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                            {update.attachments.map((file) => (
-                                <div key={file.id} className="file-item" style={{ flex: '1 1 200px', maxWidth: '300px' }}>
-                                    <div className="file-item-icon">
-                                        {getFileIcon(file.type)}
-                                    </div>
-                                    <div className="file-item-info">
-                                        <div className="file-item-name">{file.name}</div>
-                                        <div className="file-item-size">{file.size}</div>
-                                    </div>
-                                    <button className="btn btn-ghost btn-icon">
-                                        <Download size={16} />
-                                    </button>
+                            <div style={{flex:1}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'var(--space-2)',marginBottom:'4px'}}>
+                                    <span style={{fontWeight:'var(--font-weight-medium)',fontSize:'var(--font-size-sm)'}}>{c.authorName}</span>
+                                    <span style={{fontSize:'10px',padding:'1px 6px',borderRadius:'var(--radius-full)',background:c.authorRole==='agency'?'var(--color-primary-100)':'var(--color-success-100)',color:c.authorRole==='agency'?'var(--color-primary-700)':'var(--color-success-700)',textTransform:'capitalize'}}>{c.authorRole}</span>
+                                    <span style={{fontSize:'var(--font-size-xs)',color:'var(--text-muted)'}}>{formatTime(c.createdAt)}</span>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Comments Toggle */}
-                <button
-                    className="btn btn-ghost"
-                    onClick={() => setShowComments(!showComments)}
-                    style={{ marginTop: 'var(--space-4)', marginLeft: '-12px' }}
-                >
-                    <MessageSquare size={16} />
-                    {comments.length} Comments
-                    <ChevronDown size={14} style={{ transform: showComments ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-                </button>
-
-                {/* Comments Section */}
-                {showComments && (
-                    <div style={{ marginTop: 'var(--space-3)', borderTop: '1px solid var(--border-light)' }}>
-                        {comments.map((comment) => (
-                            <div key={comment.id} className="comment">
-                                <div className="avatar avatar-sm" style={{
-                                    background: comment.authorRole === 'agency'
-                                        ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
-                                        : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                    color: 'white'
-                                }}>
-                                    {comment.author?.charAt(0)}
-                                </div>
-                                <div className="comment-content">
-                                    <div className="comment-header">
-                                        <span className="comment-author">{comment.author}</span>
-                                        <span className="comment-time">{formatDateTime(comment.createdAt)}</span>
-                                    </div>
-                                    <p className="comment-text">{comment.content}</p>
-                                </div>
+                                <p style={{fontSize:'var(--font-size-sm)',color:'var(--text-secondary)',lineHeight:'var(--line-height-relaxed)'}}>{c.content}</p>
                             </div>
-                        ))}
-
-                        {/* Add Comment */}
-                        <div className="comment-input-wrapper">
-                            <div className="avatar avatar-sm avatar-gradient">
-                                {user?.name?.charAt(0)}
-                            </div>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="Add a comment..."
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                            />
-                            <button
-                                className="btn btn-primary btn-icon"
-                                onClick={handleAddComment}
-                                disabled={!newComment.trim()}
-                            >
-                                <Send size={16} />
+                            <button className="btn btn-ghost btn-icon" style={{width:'24px',height:'24px',color:'var(--text-muted)',flexShrink:0}} onClick={()=>handleDelete(c._id)}>
+                                <X size={12}/>
                             </button>
                         </div>
+                    ))}
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{display:'flex',gap:'var(--space-2)'}}>
+                <input className="form-input" style={{flex:1}} placeholder="Write a comment..." value={content} onChange={e=>setContent(e.target.value)}/>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={submitting||!content.trim()}>
+                    <Send size={14}/>
+                </button>
+            </form>
+        </div>
+    );
+}
+
+// ── UPDATE CARD ───────────────────────────────────────────────────
+
+function UpdateCard({ update, onDelete }) {
+    const [showComments, setShowComments] = useState(false);
+    const as = approvalStyle[update.approvalStatus] || approvalStyle.none;
+    const tc = typeColor[update.type] || typeColor.progress;
+
+    const fileIcon = (type) => {
+        if (type === 'image')       return <Image size={14}/>;
+        if (type === 'video')       return <span style={{fontSize:'12px'}}>🎬</span>;
+        if (type === 'pdf')         return <span style={{fontSize:'12px'}}>📄</span>;
+        if (type === 'document')    return <span style={{fontSize:'12px'}}>📝</span>;
+        if (type === 'spreadsheet') return <span style={{fontSize:'12px'}}>📊</span>;
+        return <File size={14}/>;
+    };
+
+    return (
+        <div className="card animate-fade-in-up" style={{border: update.approvalStatus==='changes-requested'?'2px solid var(--color-error-300)':undefined}}>
+            <div className="card-body">
+                {/* Header */}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'var(--space-3)',flexWrap:'wrap',gap:'var(--space-2)'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'var(--space-2)',flexWrap:'wrap'}}>
+                        <span style={{fontSize:'var(--font-size-xs)',fontWeight:'var(--font-weight-medium)',padding:'2px 8px',borderRadius:'var(--radius-full)',background:tc+'20',color:tc,textTransform:'capitalize'}}>{update.type}</span>
+                        <span style={{fontSize:'var(--font-size-xs)',fontWeight:'var(--font-weight-medium)',padding:'2px 8px',borderRadius:'var(--radius-full)',background:as.bg,color:as.text}}>{as.label}</span>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:'var(--space-2)'}}>
+                        <span style={{fontSize:'var(--font-size-xs)',color:'var(--text-muted)'}}>{formatTime(update.createdAt)}</span>
+                        <button className="btn btn-ghost btn-icon" style={{width:'28px',height:'28px',color:'var(--text-muted)'}} onClick={()=>onDelete(update._id)}>
+                            <Trash2 size={14}/>
+                        </button>
+                    </div>
+                </div>
+
+                <h4 style={{fontWeight:'var(--font-weight-semibold)',color:'var(--text-primary)',marginBottom:'var(--space-2)'}}>{update.title}</h4>
+                <p style={{fontSize:'var(--font-size-sm)',color:'var(--text-secondary)',lineHeight:'var(--line-height-relaxed)',marginBottom:'var(--space-3)'}}>{update.content}</p>
+
+                {/* Files */}
+                {update.files && update.files.length > 0 && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'var(--space-2)',marginBottom:'var(--space-3)'}}>
+                        {update.files.map((f,i) => (
+                            <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{
+                                display:'flex',alignItems:'center',gap:'6px',
+                                padding:'4px 10px',borderRadius:'var(--radius-md)',
+                                border:'1px solid var(--border-medium)',background:'var(--bg-secondary)',
+                                fontSize:'var(--font-size-xs)',color:'var(--text-secondary)',textDecoration:'none',
+                                transition:'all var(--transition-fast)'
+                            }}
+                            onMouseEnter={e=>{e.currentTarget.style.background='var(--color-primary-50)';e.currentTarget.style.borderColor='var(--color-primary-300)';}}
+                            onMouseLeave={e=>{e.currentTarget.style.background='var(--bg-secondary)';e.currentTarget.style.borderColor='var(--border-medium)';}}
+                            >
+                                {fileIcon(f.type)}
+                                <span style={{maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+                                <Download size={10}/>
+                            </a>
+                        ))}
+                    </div>
+                )}
+
+                {/* Change request note */}
+                {update.approvalStatus==='changes-requested' && update.changeRequestNote && (
+                    <div style={{padding:'var(--space-3)',background:'var(--color-error-50)',border:'1px solid var(--color-error-100)',borderRadius:'var(--radius-lg)',marginBottom:'var(--space-3)'}}>
+                        <p style={{fontSize:'var(--font-size-xs)',fontWeight:'var(--font-weight-semibold)',color:'var(--color-error-700)',marginBottom:'4px'}}>Client requested changes:</p>
+                        <p style={{fontSize:'var(--font-size-sm)',color:'var(--color-error-700)'}}>{update.changeRequestNote}</p>
+                    </div>
+                )}
+
+                {update.approvalStatus==='approved' && (
+                    <div style={{display:'flex',alignItems:'center',gap:'var(--space-2)',marginBottom:'var(--space-3)'}}>
+                        <CheckCircle2 size={14} style={{color:'var(--color-success-600)'}}/>
+                        <span style={{fontSize:'var(--font-size-xs)',color:'var(--color-success-700)'}}>
+                            Approved by {update.approvedBy} {update.approvedAt?`on ${formatDate(update.approvedAt)}`:''}
+                        </span>
+                    </div>
+                )}
+
+                {/* Comments toggle */}
+                <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={()=>setShowComments(!showComments)}
+                    style={{color:'var(--text-tertiary)',marginTop:'var(--space-1)'}}
+                >
+                    <MessageSquare size={14}/>
+                    Discussion
+                    {showComments ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                </button>
+
+                {showComments && (
+                    <div style={{marginTop:'var(--space-4)',paddingTop:'var(--space-4)',borderTop:'1px solid var(--border-light)'}}>
+                        <CommentsSection updateId={update._id}/>
                     </div>
                 )}
             </div>
@@ -421,249 +307,130 @@ function UpdateCard({ update, onAddComment, comments }) {
     );
 }
 
+// ── MAIN PAGE ─────────────────────────────────────────────────────
+
 export default function ProjectDetailPage() {
     const { projectId } = useParams();
-    const {
-        getProject,
-        getClient,
-        getUpdatesByProject,
-        getCommentsByUpdate,
-        addUpdate,
-        addComment,
-        updateProject
-    } = useData();
+    const { getUpdatesByProject, deleteUpdate } = useData();
+    const [project,    setProject]    = useState(null);
+    const [updates,    setUpdates]    = useState([]);
+    const [loading,    setLoading]    = useState(true);
+    const [showPost,   setShowPost]   = useState(false);
 
-    const [showUpdateModal, setShowUpdateModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('updates');
-    const [updates, setUpdates] = useState([]);
-    const [commentsMap, setCommentsMap] = useState({});
-
-    const project = getProject(projectId);
-    const client = project ? getClient(project.clientId) : null;
-
-    // Fetch updates when projectId changes
     useEffect(() => {
-        if (!projectId) return;
-        let cancelled = false;
-        const fetchUpdates = async () => {
-            const data = await getUpdatesByProject(projectId);
-            if (!cancelled) setUpdates(data || []);
+        const fetch = async () => {
+            setLoading(true);
+            try {
+                // Fetch project details
+                const token = localStorage.getItem('clientloop_token');
+                const res   = await window.fetch(
+                    `${import.meta.env.VITE_API_URL||'http://localhost:5000/api'}/projects/${projectId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const data = await res.json();
+                if (data.success) setProject(data.project);
+
+                const updatesData = await getUpdatesByProject(projectId);
+                setUpdates(updatesData);
+            } catch(err) { console.error(err); }
+            finally { setLoading(false); }
         };
-        fetchUpdates();
-        return () => { cancelled = true; };
-    }, [projectId, getUpdatesByProject]);
+        fetch();
+    }, [projectId]);
 
-    // Fetch comments for each update
-    useEffect(() => {
-        if (updates.length === 0) return;
-        let cancelled = false;
-        const fetchComments = async () => {
-            const map = {};
-            for (const update of updates) {
-                const uid = update._id || update.id;
-                if (uid) {
-                    try {
-                        map[uid] = await getCommentsByUpdate(uid);
-                    } catch {
-                        map[uid] = [];
-                    }
-                }
-            }
-            if (!cancelled) setCommentsMap(map);
-        };
-        fetchComments();
-        return () => { cancelled = true; };
-    }, [updates, getCommentsByUpdate]);
-
-    const getCommentsForUpdate = useCallback((updateId) => {
-        return commentsMap[updateId] || [];
-    }, [commentsMap]);
-
-    if (!project) {
-        return (
-            <div className="empty-state">
-                <AlertCircle className="empty-state-icon" />
-                <h3 className="empty-state-title">Project not found</h3>
-                <p className="empty-state-description">The project you're looking for doesn't exist.</p>
-                <Link to="/projects" className="btn btn-primary">
-                    <ArrowLeft size={18} />
-                    Back to Projects
-                </Link>
-            </div>
-        );
-    }
-
-    const pid = project?._id || project?.id;
-
-    const handlePostUpdate = async (updateData) => {
-        await addUpdate({
-            ...updateData,
-            projectId: pid
-        });
-        // Refresh updates
-        const freshUpdates = await getUpdatesByProject(projectId);
-        setUpdates(freshUpdates || []);
-        // Update project status if approval is requested
-        if (updateData.requiresApproval) {
-            updateProject(pid, { status: 'waiting-approval' });
-        }
+    const handleDelete = async (updateId) => {
+        if (!window.confirm('Delete this update?')) return;
+        await deleteUpdate(updateId);
+        setUpdates(prev => prev.filter(u => u._id !== updateId));
     };
 
-    const statusOptions = [
-        { value: 'not-started', label: 'Not Started' },
-        { value: 'in-progress', label: 'In Progress' },
-        { value: 'waiting-approval', label: 'Waiting for Approval' },
-        { value: 'completed', label: 'Completed' }
-    ];
+    const statusConfig = {
+        'in-progress':{ label:'In Progress', bg:'var(--color-info-100)',    text:'var(--color-info-700)'    },
+        'review':     { label:'In Review',   bg:'var(--color-warning-100)', text:'var(--color-warning-700)' },
+        'completed':  { label:'Completed',   bg:'var(--color-success-100)', text:'var(--color-success-700)' },
+    };
+
+    if (loading) return (
+        <div style={{textAlign:'center',padding:'var(--space-16)',color:'var(--text-tertiary)'}}>
+            <Clock size={32} style={{margin:'0 auto var(--space-3)',opacity:0.4}}/>
+            <p>Loading project...</p>
+        </div>
+    );
+
+    if (!project) return (
+        <div className="empty-state">
+            <AlertCircle className="empty-state-icon"/>
+            <h3 className="empty-state-title">Project not found</h3>
+            <Link to="/clients" className="btn btn-primary"><ArrowLeft size={18}/> Back to Clients</Link>
+        </div>
+    );
+
+    const sc = statusConfig[project.status] || statusConfig['in-progress'];
+    const pendingCount = updates.filter(u=>u.approvalStatus==='pending').length;
 
     return (
         <div>
-            {/* Breadcrumb */}
-            <Link
-                to="/projects"
-                className="btn btn-ghost"
-                style={{ marginBottom: 'var(--space-4)', marginLeft: '-12px' }}
-            >
-                <ArrowLeft size={18} />
-                Back to Projects
+            {/* Back */}
+            <Link to={`/clients/${project.clientId}`} className="btn btn-ghost" style={{marginBottom:'var(--space-4)',marginLeft:'-12px'}}>
+                <ArrowLeft size={18}/> Back to {project.clientName||'Client'}
             </Link>
 
-            {/* Project Header */}
-            <div className="card animate-fade-in-up" style={{ marginBottom: 'var(--space-6)' }}>
+            {/* Project header */}
+            <div className="card animate-fade-in-up" style={{marginBottom:'var(--space-6)'}}>
                 <div className="card-body">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'var(--space-4)'}}>
                         <div>
-                            <div style={{
-                                fontSize: 'var(--font-size-sm)',
-                                color: 'var(--text-tertiary)',
-                                marginBottom: 'var(--space-2)'
-                            }}>
-                                <Link to={`/clients/${client?._id || client?.id}`} style={{ color: 'var(--color-primary-600)' }}>
-                                    {client?.name}
-                                </Link>
+                            <div style={{display:'flex',alignItems:'center',gap:'var(--space-3)',flexWrap:'wrap',marginBottom:'var(--space-2)'}}>
+                                <h1 style={{fontSize:'var(--font-size-2xl)',fontWeight:'var(--font-weight-bold)',color:'var(--text-primary)'}}>{project.name}</h1>
+                                <span style={{fontSize:'var(--font-size-xs)',fontWeight:'var(--font-weight-medium)',padding:'3px 10px',borderRadius:'var(--radius-full)',background:sc.bg,color:sc.text}}>{sc.label}</span>
                             </div>
-                            <h1 style={{
-                                fontSize: 'var(--font-size-2xl)',
-                                fontWeight: 'var(--font-weight-bold)',
-                                marginBottom: 'var(--space-2)'
-                            }}>
-                                {project.name}
-                            </h1>
-                            <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>
-                                {project.description}
-                            </p>
+                            {project.description && <p style={{color:'var(--text-secondary)',fontSize:'var(--font-size-sm)',marginBottom:'var(--space-2)'}}>{project.description}</p>}
+                            <p style={{fontSize:'var(--font-size-xs)',color:'var(--text-muted)'}}>Client: {project.clientName} · Created {formatDate(project.createdAt)}</p>
                         </div>
+                        <button className="btn btn-primary" onClick={()=>setShowPost(true)}>
+                            <Plus size={18}/> Post Update
+                        </button>
+                    </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            <select
-                                className="form-input form-select"
-                                value={project.status}
-                                onChange={(e) => updateProject(pid, { status: e.target.value })}
-                                style={{ width: 'auto' }}
-                            >
-                                {statusOptions.map(option => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-                            <button
-                                className="btn btn-primary"
-                                onClick={() => setShowUpdateModal(true)}
-                            >
-                                <Plus size={18} />
-                                Post Update
-                            </button>
-                        </div>
+                    {/* Mini stats */}
+                    <div style={{display:'flex',gap:'var(--space-6)',marginTop:'var(--space-4)',paddingTop:'var(--space-4)',borderTop:'1px solid var(--border-light)',flexWrap:'wrap'}}>
+                        {[
+                            ['Total Updates',     updates.length,  'var(--text-primary)' ],
+                            ['Pending Approval',  pendingCount,    pendingCount>0?'var(--color-warning-600)':'var(--text-primary)'],
+                            ['Approved',          updates.filter(u=>u.approvalStatus==='approved').length, 'var(--color-success-600)'],
+                        ].map(([label,val,color])=>(
+                            <div key={label}>
+                                <div style={{fontSize:'var(--font-size-xl)',fontWeight:'var(--font-weight-bold)',color}}>{val}</div>
+                                <div style={{fontSize:'var(--font-size-xs)',color:'var(--text-tertiary)'}}>{label}</div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="tabs" style={{ marginBottom: 'var(--space-6)' }}>
-                <button
-                    className={`tab ${activeTab === 'updates' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('updates')}
-                >
-                    Updates ({updates.length})
-                </button>
-                <button
-                    className={`tab ${activeTab === 'files' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('files')}
-                >
-                    Files
-                </button>
-            </div>
-
-            {/* Updates Timeline */}
-            {activeTab === 'updates' && (
-                <>
-                    {updates.length === 0 ? (
-                        <div className="card">
-                            <div className="empty-state" style={{ padding: 'var(--space-12)' }}>
-                                <FileText className="empty-state-icon" />
-                                <h3 className="empty-state-title">No updates yet</h3>
-                                <p className="empty-state-description">
-                                    Post your first update to keep the client informed.
-                                </p>
-                                <button className="btn btn-primary" onClick={() => setShowUpdateModal(true)}>
-                                    <Plus size={18} />
-                                    Post Update
-                                </button>
-                            </div>
+            {/* Updates */}
+            {updates.length === 0 ? (
+                <div style={{textAlign:'center',padding:'var(--space-12)',color:'var(--text-tertiary)'}}>
+                    <FileText size={40} style={{margin:'0 auto var(--space-3)',opacity:0.3}}/>
+                    <h3 style={{fontWeight:'var(--font-weight-semibold)',marginBottom:'var(--space-2)'}}>No updates yet</h3>
+                    <p style={{fontSize:'var(--font-size-sm)',marginBottom:'var(--space-4)'}}>Post your first update to keep the client informed.</p>
+                    <button className="btn btn-primary" onClick={()=>setShowPost(true)}><Plus size={16}/> Post First Update</button>
+                </div>
+            ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'var(--space-4)'}}>
+                    {updates.map((update,i) => (
+                        <div key={update._id} style={{animationDelay:`${i*0.04}s`}}>
+                            <UpdateCard update={update} onDelete={handleDelete}/>
                         </div>
-                    ) : (
-                        <div>
-                            {updates.map((update, index) => (
-                                <div key={update._id || update.id} style={{ animationDelay: `${index * 0.05}s` }}>
-                                    <UpdateCard
-                                        update={update}
-                                        comments={getCommentsForUpdate(update._id || update.id)}
-                                        onAddComment={addComment}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </>
-            )}
-
-            {/* Files Tab */}
-            {activeTab === 'files' && (
-                <div className="card">
-                    <div className="card-body">
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-                            {updates.flatMap(u => u.attachments || []).length === 0 ? (
-                                <div className="empty-state" style={{ width: '100%', padding: 'var(--space-12)' }}>
-                                    <Paperclip className="empty-state-icon" />
-                                    <h3 className="empty-state-title">No files uploaded</h3>
-                                    <p className="empty-state-description">
-                                        Files attached to updates will appear here.
-                                    </p>
-                                </div>
-                            ) : (
-                                updates.flatMap(u => u.attachments || []).map((file) => (
-                                    <div key={file.id} className="file-item" style={{ flex: '1 1 280px', maxWidth: '320px' }}>
-                                        <div className="file-item-icon">
-                                            <FileText size={18} />
-                                        </div>
-                                        <div className="file-item-info">
-                                            <div className="file-item-name">{file.name}</div>
-                                            <div className="file-item-size">{file.size}</div>
-                                        </div>
-                                        <button className="btn btn-ghost btn-icon">
-                                            <Download size={16} />
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                    ))}
                 </div>
             )}
 
             <PostUpdateModal
-                isOpen={showUpdateModal}
-                onClose={() => setShowUpdateModal(false)}
-                onSubmit={handlePostUpdate}
+                isOpen={showPost}
+                onClose={()=>setShowPost(false)}
+                projectId={projectId}
+                onCreated={u=>setUpdates(prev=>[u,...prev])}
             />
         </div>
     );

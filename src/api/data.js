@@ -1,85 +1,49 @@
 import api from './client.js';
 
-// ============================================
-// CLIENT OPERATIONS
-// ============================================
+// ── CLIENTS ──────────────────────────────────────────────────────
+export const apiGetClients      = ()         => api.get('/clients');
+export const apiGetClient       = (id)       => api.get(`/clients/${id}`);
+export const apiCreateClient    = (data)     => api.post('/clients', data);
+export const apiUpdateClient    = (id, data) => api.put(`/clients/${id}`, data);
+export const apiDeleteClient    = (id)       => api.delete(`/clients/${id}`);
 
-export const apiGetClients = () => api.get('/clients');
-export const apiGetClient = (id) => api.get(`/clients/${id}`);
-export const apiCreateClient = (data) => api.post('/clients', data);
-export const apiUpdateClient = (id, data) => api.put(`/clients/${id}`, data);
-export const apiDeleteClient = (id) => api.delete(`/clients/${id}`);
+// ── PROJECTS ─────────────────────────────────────────────────────
+export const apiGetProjectsByClient   = (clientId)   => api.get(`/projects/client/${clientId}`);
+export const apiGetProject            = (id)          => api.get(`/projects/${id}`);
+export const apiGetMyProjects         = ()            => api.get('/projects/my-projects');
+export const apiCreateProject         = (data)        => api.post('/projects', data);
+export const apiUpdateProject         = (id, data)    => api.put(`/projects/${id}`, data);
+export const apiDeleteProject         = (id)          => api.delete(`/projects/${id}`);
 
-// ============================================
-// PROJECT OPERATIONS
-// ============================================
+// ── UPDATES ──────────────────────────────────────────────────────
+export const apiGetUpdatesByProject         = (projectId) => api.get(`/updates/project/${projectId}`);
+export const apiGetUpdatesByProjectClient   = (projectId) => api.get(`/updates/project/${projectId}/client`);
+export const apiGetMyUpdates                = ()           => api.get('/updates/my-updates');
+export const apiDeleteUpdate                = (id)         => api.delete(`/updates/${id}`);
+export const apiApproveUpdate               = (id)         => api.put(`/updates/${id}/approve`, {});
+export const apiRequestChanges              = (id, note)   => api.put(`/updates/${id}/request-changes`, { note });
 
-export const apiGetProjects = () => api.get('/projects');
-export const apiGetProject = (id) => api.get(`/projects/${id}`);
-export const apiGetProjectsByClient = (clientId) => api.get(`/projects/client/${clientId}`);
-export const apiCreateProject = (data) => api.post('/projects', data);
-export const apiUpdateProject = (id, data) => api.put(`/projects/${id}`, data);
-export const apiDeleteProject = (id) => api.delete(`/projects/${id}`);
+// ── COMMENTS ─────────────────────────────────────────────────────
+export const apiGetCommentsByUpdate = (updateId)        => api.get(`/comments/update/${updateId}`);
+export const apiCreateComment       = (updateId, content) => api.post('/comments', { updateId, content });
+export const apiDeleteComment       = (id)              => api.delete(`/comments/${id}`);
 
-// ============================================
-// UPDATE OPERATIONS
-// ============================================
+// ── NOTES ────────────────────────────────────────────────────────
+export const apiGetNotesByClient = (clientId)  => api.get(`/notes/client/${clientId}`);
+export const apiCreateNote       = (data)      => api.post('/notes', data);
+export const apiDeleteNote       = (id)        => api.delete(`/notes/${id}`);
 
-export const apiGetUpdates = () => api.get('/updates');
-export const apiGetUpdatesByProject = (projectId) => api.get(`/updates/project/${projectId}`);
-export const apiCreateUpdate = (data) => api.post('/updates', data);
-export const apiApproveUpdate = (id) => api.post(`/updates/${id}/approve`);
-export const apiRequestChanges = (id, note) => api.post(`/updates/${id}/request-changes`, { note });
+// ── NOTIFICATIONS ─────────────────────────────────────────────────
+export const apiGetNotifications        = ()   => api.get('/notifications');
+export const apiMarkNotificationRead    = (id) => api.put(`/notifications/${id}/read`, {});
+export const apiMarkAllNotificationsRead = ()  => api.put('/notifications/read-all', {});
+export const apiDeleteNotification      = (id) => api.delete(`/notifications/${id}`);
 
-// ============================================
-// COMMENT OPERATIONS
-// ============================================
-
-export const apiGetCommentsByUpdate = (updateId) => api.get(`/comments/update/${updateId}`);
-export const apiCreateComment = (data) => api.post('/comments', data);
-
-// ============================================
-// NOTIFICATION OPERATIONS
-// ============================================
-
-export const apiGetNotifications = () => api.get('/notifications');
-export const apiMarkNotificationRead = (id) => api.put(`/notifications/${id}/read`);
-export const apiMarkAllNotificationsRead = () => api.put('/notifications/read-all');
-
-// ============================================
-// STATS
-// ============================================
-
-export const apiGetDashboardStats = () => api.get('/stats/dashboard');
-
-// ============================================
-// FILE UPLOAD
-// ============================================
-
-export const apiUploadFile = async (file, folder = 'clientloop/files') => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('folder', folder);
-    return api.upload('/upload', formData);
-};
-
-export const apiUploadFiles = async (files, folder = 'clientloop/files') => {
-    const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-    formData.append('folder', folder);
-    return api.upload('/upload/multiple', formData);
-};
-
-export const apiDeleteFile = (publicId) => api.delete(`/upload/${publicId}`);
-
-// ============================================
-// UTILITY FUNCTIONS (kept client-side)
-// ============================================
-
+// ── UTILITIES ─────────────────────────────────────────────────────
 export const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
@@ -87,32 +51,13 @@ export const formatFileSize = (bytes) => {
 export const getFileType = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
     const types = {
-        pdf: 'pdf', doc: 'document', docx: 'document', txt: 'document', rtf: 'document',
+        pdf: 'pdf',
+        doc: 'document', docx: 'document',
         xls: 'spreadsheet', xlsx: 'spreadsheet', csv: 'spreadsheet',
+        ppt: 'document', pptx: 'document',
         jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', svg: 'image',
-        psd: 'design', ai: 'design', sketch: 'design', fig: 'design', xd: 'design',
-        zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive',
         mp4: 'video', mov: 'video', avi: 'video', webm: 'video',
-        mp3: 'audio', wav: 'audio', m4a: 'audio'
+        zip: 'file', rar: 'file', txt: 'file'
     };
     return types[ext] || 'file';
-};
-
-export const validateFile = (file, options = {}) => {
-    const {
-        maxSize = 50 * 1024 * 1024,
-        allowedTypes = null
-    } = options;
-
-    const errors = [];
-    if (file.size > maxSize) {
-        errors.push(`File size exceeds ${formatFileSize(maxSize)} limit`);
-    }
-    if (allowedTypes) {
-        const fileType = getFileType(file.name);
-        if (!allowedTypes.includes(fileType)) {
-            errors.push(`File type not allowed. Allowed types: ${allowedTypes.join(', ')}`);
-        }
-    }
-    return { valid: errors.length === 0, errors };
 };

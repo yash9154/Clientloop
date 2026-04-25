@@ -1,212 +1,181 @@
-# 🎯 ClientLoop
+# ClientLoop
 
-**B2B SaaS Client Portal for Agencies** — Share updates, manage approvals, and collaborate with clients in one professional portal.
+**Agency–Client Portal** — Manage clients, track projects, post updates, collect approvals, and share files in one clean platform.
 
----
-
-## 📖 What Is ClientLoop?
-
-ClientLoop replaces scattered WhatsApp messages, email chains, and Google Drive links with **one clean portal** for agency-client communication:
-
-- **Project Updates** — Post progress with rich text and file attachments
-- **Approval Workflows** — Request and track client approvals in real-time
-- **File Sharing** — Upload deliverables via Cloudinary CDN
-- **Comments** — Contextual feedback on each update
-- **Notifications** — In-app alerts for approvals and activity
-- **Billing** — Stripe-powered subscription plans (Free / Starter / Agency)
-
-**Two user roles:**
-| Role | Access |
-|------|--------|
-| **Agency** | Full dashboard — manage clients, projects, updates, billing |
-| **Client** | Read-only portal — view updates, approve/reject, comment |
+Replaces scattered WhatsApp messages, email threads, and Drive links with a structured, role-based portal for agencies and their clients.
 
 ---
 
-## 🛠 Tech Stack
+## What It Does
 
-### Frontend
-| Technology | Purpose |
-|-----------|---------|
-| React 18 | Component-based UI |
-| Vite 7 | Dev server & build tool |
-| React Router 6 | Client-side routing |
-| Context API | Global state (Auth + Data) |
-| Lucide React | Icon library |
-| Vanilla CSS | Custom design system |
+**Agency side:**  
+Create and manage clients → organize projects → post progress updates with file attachments → request client approvals → write internal notes → get notified on all activity.
 
-### Backend
-| Technology | Purpose |
-|-----------|---------|
-| Node.js 16+ | JavaScript runtime |
-| Express.js 4 | REST API framework |
-| MongoDB + Mongoose | Database & ODM |
-| JWT + Bcryptjs | Authentication |
-| Multer | File upload middleware |
-| Zod | Request validation |
-| Cloudinary | File/image CDN |
-| Helmet + CORS | Security |
-| express-rate-limit | DDoS protection |
-
-### External Services
-- **MongoDB Atlas** — Managed database
-- **Cloudinary** — File & image hosting
-- **Stripe** — Payment processing
-- **Google OAuth** — Social login
+**Client side:**  
+Log in with provided credentials → view project updates → approve or request changes on deliverables → comment → get email alerts.
 
 ---
 
-## 📦 Modules
+## Tech Stack
 
-| # | Module | Description |
-|---|--------|-------------|
-| 1 | **Authentication** | Register, login (email + Google OAuth), JWT sessions, password reset |
-| 2 | **Client Management** | CRUD clients, auto-generate client user accounts |
-| 3 | **Project Management** | Create projects per client, track status |
-| 4 | **Updates** | Post updates with files, request approvals, track approval status |
-| 5 | **Comments** | Threaded discussions on updates |
-| 6 | **File Upload** | Upload to Cloudinary, store metadata |
-| 7 | **Notifications** | In-app notification system with read/unread tracking |
-| 8 | **Billing** | Stripe subscriptions (Free / Starter / Agency plans) |
-| 9 | **Statistics** | Dashboard analytics and metrics |
+**Frontend:** React 18, Vite 7, React Router 6, Context API, Vanilla CSS, Lucide React  
+**Backend:** Node.js, Express.js 4, MongoDB + Mongoose 8  
+**Auth:** JWT + Bcryptjs  
+**Files:** Multer + Cloudinary CDN  
+**Email:** Nodemailer (SMTP)  
+**Security:** Helmet, CORS, express-rate-limit, Zod validation
 
 ---
 
-## 📁 Project Structure
+## Modules
+
+| Module | Description |
+|--------|-------------|
+| Authentication | Agency signup/login, client portal login, JWT sessions, profile & password settings |
+| Client Management | CRUD clients, auto-create client portal accounts, follow-up date reminders |
+| Project Management | Create projects per client, track status (in-progress / review / completed) |
+| Updates & Approvals | Post updates with files, request client approval, track approval lifecycle |
+| Comments | Bidirectional comments (agency + client) on each update |
+| File Upload | Cloudinary CDN — images, videos, PDFs, Office docs, archives (up to 50MB/file) |
+| Notes / Timeline | Client-level activity log — calls, emails, meetings, follow-ups |
+| In-App Notifications | Notification bell for both agency and client; mark as read |
+| Email Notifications | Welcome email, update alerts, approval/changes emails via Nodemailer |
+| Dashboard Stats | Total clients, active clients, leads, overdue follow-ups |
+| Settings | Update profile name/company, change password |
+
+---
+
+## Project Structure
 
 ```
 clientloop/
-├── src/                        # Frontend (React + Vite)
+├── src/                          # Frontend (React + Vite)
 │   ├── pages/
 │   │   ├── LandingPage.jsx
-│   │   ├── auth/               # Login, Signup, ClientLogin
-│   │   ├── agency/             # Dashboard, Clients, Projects, Billing, Settings
-│   │   └── client/             # ClientDashboard, ClientProjectView
-│   ├── layouts/                # AgencyLayout, ClientLayout
-│   ├── context/                # AuthContext, DataContext
-│   ├── api/                    # API call functions
-│   ├── App.jsx                 # Root component + routing
-│   ├── main.jsx                # Entry point
-│   ├── index.css               # Global styles
-│   └── components.css          # Component styles
+│   │   ├── auth/                 # Login, Signup, ClientLogin
+│   │   ├── agency/               # Dashboard, Clients, ClientDetail, ProjectDetail, Settings
+│   │   └── client/               # ClientDashboard, ClientProjectView
+│   ├── layouts/                  # AgencyLayout (sidebar + nav), ClientLayout
+│   ├── context/                  # AuthContext, DataContext
+│   ├── api/                      # fetch wrappers for all API calls
+│   ├── index.css                 # Design system (CSS variables, tokens)
+│   └── components.css            # Shared component styles
 │
-├── server/                     # Backend (Express + MongoDB)
+├── server/                       # Backend (Express + MongoDB)
 │   └── src/
-│       ├── index.js            # Server entry point
-│       ├── controllers/        # Auth, Client, Project, Update, Comment, etc.
-│       ├── models/             # User, Client, Project, Update, Comment, Notification
-│       ├── routes/             # API route definitions
-│       ├── middleware/         # Auth, validation, error handler
-│       ├── utils/              # Cloudinary, email, JWT, Zod schemas
-│       └── config/db.js        # MongoDB connection
+│       ├── index.js              # Server entry, all routes mounted here
+│       ├── controllers/          # authController, clientController, projectController,
+│       │                         # updateController, commentController, noteController,
+│       │                         # notificationController
+│       ├── models/               # User, Client, Project, Update, Note, Comment, Notification
+│       ├── routes/               # Route files per resource
+│       ├── middleware/           # auth.js (protect, requireAgency, requireClient), errorHandler
+│       ├── utils/                # cloudinary.js, Emailservice.js, generateToken.js, validationSchemas.js
+│       └── config/db.js          # MongoDB connection
 │
-├── public/                     # Static assets
-├── index.html                  # HTML entry
-├── vite.config.js              # Vite config
-├── .env.example                # Environment template
-├── .gitignore
-└── package.json                # Frontend dependencies
+├── index.html
+├── vite.config.js
+├── .env.example
+└── package.json
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
-- **Node.js 16+** & npm
-- **MongoDB** (local or [MongoDB Atlas](https://www.mongodb.com/atlas))
-- **Cloudinary** account ([cloudinary.com](https://cloudinary.com))
-- **Google OAuth** credentials (optional, for social login)
+- Node.js 16+
+- MongoDB Atlas account (or local MongoDB)
+- Cloudinary account
+- SMTP credentials (Gmail app password, Mailtrap, etc.)
 
-### 1. Clone & Install
+### 1. Install
 
 ```bash
 git clone https://github.com/yash9154/Clientloop.git
 cd clientloop
 
-# Frontend dependencies
-npm install
+npm install          # frontend deps
 
-# Backend dependencies
 cd server
-npm install
+npm install          # backend deps
 cd ..
 ```
 
-### 2. Configure Environment
+### 2. Configure
 
-**Frontend** — copy `.env.example` to `.env` in root:
+**Frontend** — create `.env` in root:
 ```env
 VITE_API_URL=http://localhost:5000/api
-VITE_APP_NAME=ClientLoop
-VITE_GOOGLE_CLIENT_ID=your-google-client-id
-VITE_STRIPE_PUBLIC_KEY=pk_test_xxxxx
 ```
 
-**Backend** — copy `server/.env.example` to `server/.env`:
+**Backend** — create `.env` inside `server/`:
 ```env
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/clientloop
-JWT_SECRET=your-secret-jwt-key
+MONGODB_URI=your-mongodb-atlas-uri
+JWT_SECRET=your-secret-key
 JWT_EXPIRE=7d
-GOOGLE_CLIENT_ID=your-google-id
-GOOGLE_CLIENT_SECRET=your-google-secret
+CLIENT_URL=http://localhost:5173
+
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM="ClientLoop <noreply@clientloop.app>"
 ```
 
 ### 3. Run
 
 ```bash
 # Terminal 1 — Backend (port 5000)
-cd server
-npm run dev
+cd server && npm run dev
 
 # Terminal 2 — Frontend (port 5173)
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open `http://localhost:5173`
 
-### 4. Seed Data (Optional)
+### 4. Seed (optional)
 ```bash
-cd server
-npm run seed
+cd server && npm run seed
 ```
 
 ---
 
-## 🔌 API Overview
+## API Overview
 
-All endpoints prefixed with `/api`. Auth routes are public; others require `Authorization: Bearer <token>`.
+All routes prefixed with `/api`. Protected routes require `Authorization: Bearer <token>`.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/register` | Register new agency user |
-| POST | `/auth/login` | Login (returns JWT) |
-| GET | `/auth/me` | Get current user |
-| GET/POST | `/clients` | List / Create clients |
-| GET/PUT/DELETE | `/clients/:id` | Client CRUD |
-| GET/POST | `/projects` | List / Create projects |
-| GET/PUT/DELETE | `/projects/:id` | Project CRUD |
-| GET/POST | `/updates` | List / Create updates |
-| PUT | `/updates/:id/approve` | Approve update |
-| PUT | `/updates/:id/request-changes` | Request changes |
-| GET/POST | `/comments` | List / Add comments |
-| POST | `/upload` | Upload file to Cloudinary |
-| GET | `/notifications` | Get user notifications |
-| GET | `/stats` | Dashboard statistics |
-| GET/PUT | `/billing/plan` | Billing & subscription |
+| Resource | Routes |
+|----------|--------|
+| Auth | `POST /auth/signup` · `POST /auth/login` · `GET /auth/me` · `PUT /auth/profile` · `PUT /auth/password` |
+| Clients | `GET/POST /clients` · `GET/PUT/DELETE /clients/:id` |
+| Projects | `GET /projects/my-projects` · `GET/POST /projects` · `GET/PUT/DELETE /projects/:id` |
+| Updates | `GET/POST /updates` · `PUT /updates/:id/approve` · `PUT /updates/:id/request-changes` |
+| Comments | `GET /comments/:updateId` · `POST/DELETE /comments` |
+| Notes | `GET /notes/client/:clientId` · `POST/DELETE /notes` |
+| Notifications | `GET /notifications` · `PUT /notifications/:id/read` · `PUT /notifications/read-all` |
 
 ---
 
-## 📄 License
+## Two User Roles
 
-MIT License — see [LICENSE](LICENSE) for details.
+| | Agency | Client |
+|---|--------|--------|
+| Login URL | `/login` | `/client-login` |
+| Creates account via | `/signup` | Auto-created when agency adds a client |
+| Access | Full dashboard | Read-only project portal |
+| Can post updates | ✅ | ❌ |
+| Can approve updates | ❌ | ✅ |
+| Can post comments | ✅ | ✅ |
 
 ---
 
-<div align="center">
-  <strong>Made with ❤️ by the ClientLoop Team</strong>
-</div>
+## License
+
+MIT

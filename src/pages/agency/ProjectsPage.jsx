@@ -1,86 +1,71 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import api from '../../api/client.js';
 import {
-    Plus,
-    Search,
-    Filter,
-    FolderOpen,
-    Clock,
-    CheckCircle2,
-    AlertCircle,
-    X,
-    Calendar
+    Plus, Search, FolderOpen, Clock,
+    CheckCircle2, AlertCircle, Users, X
 } from 'lucide-react';
 
-function CreateProjectModal({ isOpen, onClose, onSubmit, clients }) {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [clientId, setClientId] = useState('');
+// ── CREATE PROJECT MODAL ──────────────────────────────────────────
+
+function CreateProjectModal({ isOpen, onClose, clients, onCreated }) {
+    const { addProject } = useData();
+    const [form,   setForm]   = useState({ name: '', description: '', clientId: '' });
+    const [saving, setSaving] = useState(false);
+    const [error,  setError]  = useState('');
 
     if (!isOpen) return null;
+    const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }));
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSubmit({ name, description, clientId });
-        setName('');
-        setDescription('');
-        setClientId('');
-        onClose();
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setSaving(true); setError('');
+        try {
+            const project = await addProject(form);
+            onCreated(project);
+            setForm({ name: '', description: '', clientId: '' });
+            onClose();
+        } catch (err) {
+            setError(err.message || 'Failed to create project');
+        } finally { setSaving(false); }
     };
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2 className="modal-title">Create New Project</h2>
-                    <button className="modal-close" onClick={onClose}>
-                        <X size={20} />
-                    </button>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={20} /></button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="modal-body">
-                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        {error && (
+                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-lg)', color: 'var(--color-error-600)', fontSize: 'var(--font-size-sm)' }}>
+                                {error}
+                            </div>
+                        )}
+                        <div className="form-group">
                             <label className="form-label required">Client</label>
-                            <select
-                                className="form-input form-select"
-                                value={clientId}
-                                onChange={(e) => setClientId(e.target.value)}
-                                required
-                            >
-                                <option value="">Select a client</option>
-                                {clients.map(client => (
-                                    <option key={client._id || client.id} value={client._id || client.id}>{client.name}</option>
+                            <select className="form-input form-select" value={form.clientId} onChange={set('clientId')} required>
+                                <option value="">Select a client...</option>
+                                {clients.map(c => (
+                                    <option key={c._id} value={c._id}>{c.name}</option>
                                 ))}
                             </select>
                         </div>
-                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                        <div className="form-group">
                             <label className="form-label required">Project Name</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="e.g., Website Redesign"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                            />
+                            <input className="form-input" placeholder="e.g. Website Redesign" value={form.name} onChange={set('name')} required />
                         </div>
                         <div className="form-group">
                             <label className="form-label">Description</label>
-                            <textarea
-                                className="form-input form-textarea"
-                                placeholder="Brief description of the project..."
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                            />
+                            <textarea className="form-input form-textarea" placeholder="Brief description..." value={form.description} onChange={set('description')} rows={3} />
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            Create Project
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={saving}>
+                            {saving ? 'Creating...' : <><Plus size={16} /> Create Project</>}
                         </button>
                     </div>
                 </form>
@@ -89,255 +74,237 @@ function CreateProjectModal({ isOpen, onClose, onSubmit, clients }) {
     );
 }
 
-function StatusBadge({ status }) {
-    const config = {
-        'not-started': { label: 'Not Started', class: 'badge-not-started' },
-        'in-progress': { label: 'In Progress', class: 'badge-in-progress' },
-        'waiting-approval': { label: 'Waiting for Approval', class: 'badge-waiting' },
-        'completed': { label: 'Completed', class: 'badge-completed' }
-    };
-
-    const { label, class: className } = config[status] || config['not-started'];
-
-    return <span className={`badge ${className}`}>{label}</span>;
-}
-
-function ProjectRow({ project, client }) {
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    const getInitials = (name) => {
-        return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
-    };
-
-    return (
-        <Link
-            to={`/projects/${project._id || project.id}`}
-            className="transition-colors"
-            style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 180px 180px 120px',
-                alignItems: 'center',
-                gap: 'var(--space-4)',
-                padding: 'var(--space-4) var(--space-6)',
-                borderBottom: '1px solid var(--border-light)'
-            }}
-        >
-            <div>
-                <div style={{
-                    fontWeight: 'var(--font-weight-medium)',
-                    color: 'var(--text-primary)',
-                    marginBottom: 'var(--space-1)'
-                }}>
-                    {project.name}
-                </div>
-                <div style={{
-                    fontSize: 'var(--font-size-sm)',
-                    color: 'var(--text-tertiary)'
-                }}>
-                    {project.description?.slice(0, 60)}{project.description?.length > 60 ? '...' : ''}
-                </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <div
-                    className="avatar avatar-sm"
-                    style={{
-                        background: `hsl(${client?.name?.charCodeAt(0) * 10 % 360}, 60%, 50%)`,
-                        color: 'white'
-                    }}
-                >
-                    {getInitials(client?.name)}
-                </div>
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
-                    {client?.name || 'Unknown'}
-                </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)' }}>
-                <Calendar size={14} />
-                {formatDate(project.updatedAt)}
-            </div>
-            <div>
-                <StatusBadge status={project.status} />
-            </div>
-        </Link>
-    );
-}
-
-function ProjectCard({ project, client }) {
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    return (
-        <Link to={`/projects/${project._id || project.id}`} className="card card-hover animate-fade-in-up" style={{ display: 'block' }}>
-            <div className="card-body">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
-                    <div>
-                        <div style={{
-                            fontSize: 'var(--font-size-xs)',
-                            color: 'var(--text-tertiary)',
-                            marginBottom: 'var(--space-1)'
-                        }}>
-                            {client?.name}
-                        </div>
-                        <h3 style={{
-                            fontSize: 'var(--font-size-base)',
-                            fontWeight: 'var(--font-weight-semibold)',
-                            color: 'var(--text-primary)'
-                        }}>
-                            {project.name}
-                        </h3>
-                    </div>
-                    <StatusBadge status={project.status} />
-                </div>
-                <p style={{
-                    fontSize: 'var(--font-size-sm)',
-                    color: 'var(--text-tertiary)',
-                    marginBottom: 'var(--space-4)',
-                    lineHeight: 'var(--line-height-relaxed)'
-                }}>
-                    {project.description?.slice(0, 80)}{project.description?.length > 80 ? '...' : ''}
-                </p>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: 'var(--font-size-xs)',
-                    color: 'var(--text-muted)'
-                }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-                        <Clock size={12} />
-                        Updated {formatDate(project.updatedAt)}
-                    </span>
-                </div>
-            </div>
-        </Link>
-    );
-}
+// ── MAIN PAGE ─────────────────────────────────────────────────────
 
 export default function ProjectsPage() {
-    const { clients, projects, addProject } = useData();
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+    const { clients } = useData();
+    const [projects,     setProjects]     = useState([]);
+    const [loading,      setLoading]      = useState(true);
+    const [searchQuery,  setSearchQuery]  = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+    const [showCreate,   setShowCreate]   = useState(false);
 
-    const getClient = (clientId) => clients.find(c => (c._id === clientId || c.id === clientId));
+    // Fetch all projects across all clients
+    const fetchAllProjects = async () => {
+        if (clients.length === 0) { setLoading(false); return; }
+        setLoading(true);
+        try {
+            const results = await Promise.all(
+                clients.map(c =>
+                    api.get(`/projects/client/${c._id}`)
+                        .then(d => (d.projects || []))
+                        .catch(() => [])
+                )
+            );
+            const all = results.flat().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setProjects(all);
+        } catch (err) {
+            console.error('Error fetching projects:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const filteredProjects = projects.filter(project => {
-        const matchesSearch =
-            project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            project.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    useEffect(() => { fetchAllProjects(); }, [clients]);
 
-        const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+    const statusConfig = {
+        'in-progress': { label: 'In Progress', bg: 'var(--color-info-100)',    text: 'var(--color-info-700)',    icon: Clock        },
+        'review':      { label: 'In Review',   bg: 'var(--color-warning-100)', text: 'var(--color-warning-700)', icon: AlertCircle  },
+        'completed':   { label: 'Completed',   bg: 'var(--color-success-100)', text: 'var(--color-success-700)', icon: CheckCircle2 },
+    };
 
-        return matchesSearch && matchesStatus;
+    const filtered = projects.filter(p => {
+        const matchSearch =
+            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.clientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+        return matchSearch && matchStatus;
     });
 
-    const statusCounts = {
-        all: projects.length,
-        'not-started': projects.filter(p => p.status === 'not-started').length,
+    const counts = {
+        all:           projects.length,
         'in-progress': projects.filter(p => p.status === 'in-progress').length,
-        'waiting-approval': projects.filter(p => p.status === 'waiting-approval').length,
-        'completed': projects.filter(p => p.status === 'completed').length
+        'review':      projects.filter(p => p.status === 'review').length,
+        'completed':   projects.filter(p => p.status === 'completed').length,
     };
+
+    const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     return (
         <div>
+            {/* Header */}
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                 <div>
                     <h1 className="page-title">Projects</h1>
-                    <p className="page-subtitle">Track and manage all your client projects</p>
+                    <p className="page-subtitle">{projects.length} project{projects.length !== 1 ? 's' : ''} across {clients.length} client{clients.length !== 1 ? 's' : ''}</p>
                 </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => setShowCreateModal(true)}
-                >
-                    <Plus size={18} />
-                    Create Project
+                <button className="btn btn-primary" onClick={() => setShowCreate(true)} disabled={clients.length === 0}>
+                    <Plus size={18} /> New Project
                 </button>
             </div>
 
-            {/* Filters */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-4)',
-                marginBottom: 'var(--space-6)',
-                flexWrap: 'wrap',
-                alignItems: 'center'
-            }}>
-                <div className="search-input-wrapper" style={{ flex: 1, maxWidth: '400px' }}>
-                    <Search size={18} className="search-input-icon" />
-                    <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Search projects..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{ paddingLeft: '40px' }}
-                    />
-                </div>
-
-                <div className="tabs" style={{ border: 'none', padding: 0 }}>
-                    {[
-                        { key: 'all', label: 'All' },
-                        { key: 'in-progress', label: 'In Progress' },
-                        { key: 'waiting-approval', label: 'Waiting' },
-                        { key: 'completed', label: 'Completed' }
-                    ].map(tab => (
-                        <button
-                            key={tab.key}
-                            className={`tab ${statusFilter === tab.key ? 'active' : ''}`}
-                            onClick={() => setStatusFilter(tab.key)}
-                        >
-                            {tab.label} ({statusCounts[tab.key]})
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Projects Grid */}
-            {filteredProjects.length === 0 ? (
+            {clients.length === 0 ? (
                 <div className="empty-state">
-                    <FolderOpen className="empty-state-icon" />
-                    <h3 className="empty-state-title">
-                        {searchQuery || statusFilter !== 'all' ? 'No projects found' : 'No projects yet'}
-                    </h3>
-                    <p className="empty-state-description">
-                        {searchQuery || statusFilter !== 'all'
-                            ? 'Try adjusting your filters'
-                            : 'Create your first project to get started'
-                        }
-                    </p>
-                    {!searchQuery && statusFilter === 'all' && (
-                        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                            <Plus size={18} />
-                            Create Your First Project
-                        </button>
-                    )}
+                    <Users className="empty-state-icon" />
+                    <h3 className="empty-state-title">No clients yet</h3>
+                    <p className="empty-state-description">Add a client first before creating projects.</p>
+                    <Link to="/clients" className="btn btn-primary"><Plus size={18} /> Add Client</Link>
                 </div>
             ) : (
-                <div className="grid grid-cols-3 lg:grid-cols-2 md:grid-cols-1 gap-4">
-                    {filteredProjects.map((project, index) => (
-                        <div key={project._id || project.id} style={{ animationDelay: `${index * 0.03}s` }}>
-                            <ProjectCard project={project} client={getClient(project.clientId)} />
+                <>
+                    {/* Stats */}
+                    <div className="grid grid-cols-4 md:grid-cols-2 gap-4" style={{ marginBottom: 'var(--space-6)' }}>
+                        {[
+                            { label: 'Total',       value: counts.all,           color: 'var(--color-primary-600)', bg: 'var(--color-primary-100)' },
+                            { label: 'In Progress', value: counts['in-progress'], color: 'var(--color-info-600)',    bg: 'var(--color-info-100)'    },
+                            { label: 'In Review',   value: counts['review'],      color: 'var(--color-warning-600)', bg: 'var(--color-warning-100)' },
+                            { label: 'Completed',   value: counts['completed'],   color: 'var(--color-success-600)', bg: 'var(--color-success-100)' },
+                        ].map(s => (
+                            <div key={s.label} className="stat-card animate-fade-in-up">
+                                <div className="stat-icon" style={{ background: s.bg, color: s.color }}>
+                                    <FolderOpen size={20} />
+                                </div>
+                                <div className="stat-content">
+                                    <div className="stat-label">{s.label}</div>
+                                    <div className="stat-value">{s.value}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Search + Filter */}
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div className="search-input-wrapper" style={{ flex: 1, minWidth: '200px', maxWidth: '400px' }}>
+                            <Search size={18} className="search-input-icon" />
+                            <input
+                                type="text" className="form-input"
+                                placeholder="Search projects or clients..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                style={{ paddingLeft: '40px' }}
+                            />
                         </div>
-                    ))}
-                </div>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                            {[
+                                { key: 'all',         label: `All (${counts.all})`                    },
+                                { key: 'in-progress', label: `In Progress (${counts['in-progress']})` },
+                                { key: 'review',      label: `In Review (${counts['review']})`         },
+                                { key: 'completed',   label: `Completed (${counts['completed']})`      },
+                            ].map(tab => (
+                                <button
+                                    key={tab.key}
+                                    className={`btn btn-sm ${statusFilter === tab.key ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setStatusFilter(tab.key)}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Projects list */}
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 'var(--space-16)', color: 'var(--text-tertiary)' }}>
+                            <Clock size={32} style={{ margin: '0 auto var(--space-3)', opacity: 0.4 }} />
+                            <p>Loading projects...</p>
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div className="empty-state">
+                            <FolderOpen className="empty-state-icon" />
+                            <h3 className="empty-state-title">
+                                {searchQuery || statusFilter !== 'all' ? 'No projects match your filters' : 'No projects yet'}
+                            </h3>
+                            <p className="empty-state-description">
+                                {searchQuery || statusFilter !== 'all'
+                                    ? 'Try adjusting your search or filter'
+                                    : 'Create your first project to get started'}
+                            </p>
+                            {!searchQuery && statusFilter === 'all' && (
+                                <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                                    <Plus size={18} /> Create First Project
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                            {filtered.map((project, i) => {
+                                const sc = statusConfig[project.status] || statusConfig['in-progress'];
+                                const StatusIcon = sc.icon;
+                                return (
+                                    <div key={project._id} className="card card-hover animate-fade-in-up" style={{ animationDelay: `${i * 0.04}s` }}>
+                                        <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                                            {/* Folder icon */}
+                                            <div style={{
+                                                width: '44px', height: '44px', flexShrink: 0,
+                                                background: 'var(--color-primary-100)', borderRadius: 'var(--radius-lg)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: 'var(--color-primary-600)'
+                                            }}>
+                                                <FolderOpen size={20} />
+                                            </div>
+
+                                            {/* Project info */}
+                                            <div style={{ flex: 1, minWidth: '180px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                                    <span style={{ fontWeight: 'var(--font-weight-semibold)', color: 'var(--text-primary)' }}>
+                                                        {project.name}
+                                                    </span>
+                                                    <span style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                        fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-medium)',
+                                                        padding: '2px 10px', borderRadius: 'var(--radius-full)',
+                                                        background: sc.bg, color: sc.text
+                                                    }}>
+                                                        <StatusIcon size={11} /> {sc.label}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
+                                                        <Users size={12} /> {project.clientName || 'Unknown client'}
+                                                    </span>
+                                                    {project.description && (
+                                                        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                                                            {project.description.slice(0, 60)}{project.description.length > 60 ? '...' : ''}
+                                                        </span>
+                                                    )}
+                                                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                                                        Created {formatDate(project.createdAt)}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+                                                <Link
+                                                    to={`/clients/${project.clientId}`}
+                                                    className="btn btn-ghost btn-sm"
+                                                    style={{ color: 'var(--text-tertiary)' }}
+                                                    onClick={e => e.stopPropagation()}
+                                                >
+                                                    <Users size={14} /> Client
+                                                </Link>
+                                                <Link to={`/projects/${project._id}`} className="btn btn-primary btn-sm">
+                                                    Open →
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </>
             )}
 
             <CreateProjectModal
-                isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                onSubmit={addProject}
+                isOpen={showCreate}
+                onClose={() => setShowCreate(false)}
                 clients={clients}
+                onCreated={p => {
+                    setProjects(prev => [p, ...prev]);
+                    setShowCreate(false);
+                }}
             />
         </div>
     );
