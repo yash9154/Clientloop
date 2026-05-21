@@ -209,7 +209,7 @@ function UpdateCard({ update, onApprove, onRequestChanges, onAddComment, comment
                                                 <div className="file-item-size">{file.size}</div>
                                             </div>
                                             {file.url && (
-                                                <a href={file.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                                                <a href={file.url} download={file.name} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
                                                     <Download size={14} />
                                                     Download
                                                 </a>

@@ -117,7 +117,7 @@ function UpdateCard({ update, onApprove, onRequestChanges }) {
                 {update.files && update.files.length > 0 && (
                     <div style={{display:'flex',flexWrap:'wrap',gap:'var(--space-2)',marginBottom:'var(--space-3)'}}>
                         {update.files.map((f,i) => (
-                            <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{
+                            <a key={i} href={f.url} download={f.name} target="_blank" rel="noreferrer" style={{
                                 display:'flex',alignItems:'center',gap:'6px',padding:'4px 10px',
                                 borderRadius:'var(--radius-md)',border:'1px solid var(--border-medium)',
                                 background:'var(--bg-secondary)',fontSize:'var(--font-size-xs)',
